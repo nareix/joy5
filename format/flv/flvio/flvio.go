@@ -180,38 +180,38 @@ type Tag struct {
 	Header, Data []byte
 }
 
-func (self Tag) DebugFields() []interface{} {
-	p := []interface{}{"Type", TagTypeString(self.Type), "Time", self.Time, "Len", len(self.Data)}
+func (t Tag) DebugFields() []interface{} {
+	p := []interface{}{"Type", TagTypeString(t.Type), "Time", t.Time, "Len", len(t.Data)}
 
-	switch self.Type {
+	switch t.Type {
 	case TAG_VIDEO:
 		p = append(p, "FrameType")
-		p = append(p, FrameTypeString(self.FrameType))
+		p = append(p, FrameTypeString(t.FrameType))
 
 		p = append(p, "VideoFormat")
-		p = append(p, self.VideoFormat)
+		p = append(p, t.VideoFormat)
 
-		switch self.VideoFormat {
+		switch t.VideoFormat {
 		case VIDEO_H264, VIDEO_H265:
 			p = append(p, "AVCPacketType")
-			p = append(p, self.AVCPacketType)
+			p = append(p, t.AVCPacketType)
 		}
 
-		if self.CTime != 0 {
+		if t.CTime != 0 {
 			p = append(p, "Ctime")
-			p = append(p, self.CTime)
+			p = append(p, t.CTime)
 		}
 
 	case TAG_AMF0, TAG_AMF3:
-		amf3 := self.Type == TAG_AMF3
-		arr, _ := ParseAMFVals(self.Data, amf3)
+		amf3 := t.Type == TAG_AMF3
+		arr, _ := ParseAMFVals(t.Data, amf3)
 		arrjs, _ := json.Marshal(arr)
 		p = append(p, "Data")
 		p = append(p, string(arrjs))
 	}
 
 	p = append(p, "Header")
-	p = append(p, fmt.Sprintf("%x", self.Header))
+	p = append(p, fmt.Sprintf("%x", t.Header))
 	return p
 }
 
@@ -318,12 +318,12 @@ func (t *Tag) ParseHeader(b []byte) (n int, err error) {
 	return
 }
 
-func (self *Tag) Parse(b []byte) (err error) {
+func (t *Tag) Parse(b []byte) (err error) {
 	var n int
-	if n, err = self.ParseHeader(b); err != nil {
+	if n, err = t.ParseHeader(b); err != nil {
 		return
 	}
-	self.Data = b[n:]
+	t.Data = b[n:]
 	return
 }
 

@@ -19,15 +19,15 @@ type AMFParseError struct {
 	Bytes   []byte
 }
 
-func (self *AMFParseError) Error() string {
-	if self.Bytes != nil {
+func (e *AMFParseError) Error() string {
+	if e.Bytes != nil {
 		s := []string{}
-		for p := self; p != nil; p = p.Next {
+		for p := e; p != nil; p = p.Next {
 			s = append(s, fmt.Sprintf("%s", p.Message))
 		}
-		return fmt.Sprintf("AMFParseError(%d)", self.Offset) + strings.Join(s, ",") + fmt.Sprintf("Bytes(%x)", self.Bytes)
+		return fmt.Sprintf("AMFParseError(%d)", e.Offset) + strings.Join(s, ",") + fmt.Sprintf("Bytes(%x)", e.Bytes)
 	}
-	return fmt.Sprintf("AMFParseError(%d)", self.Offset)
+	return fmt.Sprintf("AMFParseError(%d)", e.Offset)
 }
 
 func amfParseErr(message string, b []byte, offset int, err error) error {

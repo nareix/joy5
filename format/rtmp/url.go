@@ -25,7 +25,7 @@ func splitPath(u *url.URL) (app, stream string) {
 	return
 }
 
-func getTcUrl(u *url.URL) string {
+func getTcURL(u *url.URL) string {
 	app, _ := splitPath(u)
 	nu := *u
 	nu.RawQuery = ""

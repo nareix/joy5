@@ -23,7 +23,7 @@ const (
 
 type Stage int
 
-var stagestrs = map[Stage]string{
+var StageString = map[Stage]string{
 	StageHandshakeDone:           "StageHandshakeDone",
 	StageGotPublishOrPlayCommand: "StageGotPublishOrPlayCommand",
 	StageCommandDone:             "StageCommandDone",
@@ -31,7 +31,7 @@ var stagestrs = map[Stage]string{
 }
 
 func (s Stage) String() string {
-	return stagestrs[s]
+	return StageString[s]
 }
 
 func (c *Conn) writeBasicConf() (err error) {
@@ -323,7 +323,7 @@ func (c *Conn) writeConnect(path string) (err error) {
 		flvio.AMFMap{
 			{K: "app", V: path},
 			{K: "flashVer", V: "LNX 9,0,124,2"},
-			{K: "tcUrl", V: getTcUrl(c.URL)},
+			{K: "tcUrl", V: getTcURL(c.URL)},
 			{K: "fpad", V: false},
 			{K: "capabilities", V: 15},
 			{K: "audioCodecs", V: 4071},

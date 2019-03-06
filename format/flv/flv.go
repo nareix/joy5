@@ -58,32 +58,32 @@ func NewMuxer(w io.Writer) *Muxer {
 	return m
 }
 
-func (self *Muxer) WriteFileHeader() (err error) {
-	if self.filehdrwritten {
+func (w *Muxer) WriteFileHeader() (err error) {
+	if w.filehdrwritten {
 		return
 	}
 
 	var flags uint8
-	if self.HasVideo {
+	if w.HasVideo {
 		flags |= flvio.FILE_HAS_VIDEO
 	}
-	if self.HasAudio {
+	if w.HasAudio {
 		flags |= flvio.FILE_HAS_AUDIO
 	}
 
-	flvio.FillFileHeader(self.b, flags)
-	if _, err = self.W.Write(self.b[:flvio.FileHeaderLength]); err != nil {
+	flvio.FillFileHeader(w.b, flags)
+	if _, err = w.W.Write(w.b[:flvio.FileHeaderLength]); err != nil {
 		return
 	}
-	self.filehdrwritten = true
+	w.filehdrwritten = true
 	return
 }
 
-func (self *Muxer) WriteTag(tag flvio.Tag) (err error) {
-	if err = self.WriteFileHeader(); err != nil {
+func (w *Muxer) WriteTag(tag flvio.Tag) (err error) {
+	if err = w.WriteFileHeader(); err != nil {
 		return
 	}
-	return flvio.WriteTag(self.W, tag, self.b)
+	return flvio.WriteTag(w.W, tag, w.b)
 }
 
 func AACTagFromCodec(aac *aac.Codec) flvio.Tag {
@@ -152,8 +152,8 @@ func WritePacket(pkt av.Packet, writeTag func(flvio.Tag) error) (err error) {
 	return
 }
 
-func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
-	return WritePacket(pkt, self.WriteTag)
+func (w *Muxer) WritePacket(pkt av.Packet) (err error) {
+	return WritePacket(pkt, w.WriteTag)
 }
 
 type Demuxer struct {
@@ -174,29 +174,29 @@ func NewDemuxer(r io.Reader) *Demuxer {
 	return d
 }
 
-func (self *Demuxer) ReadFileHeader() (err error) {
-	if self.gotfilehdr {
+func (r *Demuxer) ReadFileHeader() (err error) {
+	if r.gotfilehdr {
 		return
 	}
-	if _, err = io.ReadFull(self.r, self.b[:flvio.FileHeaderLength]); err != nil {
+	if _, err = io.ReadFull(r.r, r.b[:flvio.FileHeaderLength]); err != nil {
 		return
 	}
 	var skip int
-	if _, skip, err = flvio.ParseFileHeader(self.b); err != nil {
+	if _, skip, err = flvio.ParseFileHeader(r.b); err != nil {
 		return
 	}
-	if _, err = io.CopyN(ioutil.Discard, self.r, int64(skip)); err != nil {
+	if _, err = io.CopyN(ioutil.Discard, r.r, int64(skip)); err != nil {
 		return
 	}
-	self.gotfilehdr = true
+	r.gotfilehdr = true
 	return
 }
 
-func (self *Demuxer) ReadTag() (tag flvio.Tag, err error) {
-	if err = self.ReadFileHeader(); err != nil {
+func (r *Demuxer) ReadTag() (tag flvio.Tag, err error) {
+	if err = r.ReadFileHeader(); err != nil {
 		return
 	}
-	if tag, err = flvio.ReadTag(self.r, self.b, self.Malloc); err != nil {
+	if tag, err = flvio.ReadTag(r.r, r.b, r.Malloc); err != nil {
 		return
 	}
 	return
@@ -255,6 +255,6 @@ func ReadPacket(readTag func() (flvio.Tag, error)) (pkt av.Packet, err error) {
 	}
 }
 
-func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
-	return ReadPacket(self.ReadTag)
+func (r *Demuxer) ReadPacket() (pkt av.Packet, err error) {
+	return ReadPacket(r.ReadTag)
 }

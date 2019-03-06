@@ -81,25 +81,25 @@ type command struct {
 	arr, params []interface{}
 }
 
-func (self *message) Start() (err error) {
-	self.msgdataleft = self.msgdatalen
+func (m *message) Start() (err error) {
+	m.msgdataleft = m.msgdatalen
 	var b []byte
 
-	malloc := self.malloc
+	malloc := m.malloc
 	if malloc == nil {
 		malloc = func(n int) ([]byte, error) { return make([]byte, n), nil }
 	}
 
-	if self.msgdatalen > 4*1024*1024 {
-		err = fmt.Errorf("MsgDataTooBig(%d)", self.msgdatalen)
+	if m.msgdatalen > 4*1024*1024 {
+		err = fmt.Errorf("MsgDataTooBig(%d)", m.msgdatalen)
 		return
 	}
 
-	if b, err = malloc(int(self.msgdatalen)); err != nil {
+	if b, err = malloc(int(m.msgdatalen)); err != nil {
 		return
 	}
 
-	self.msgdata = b
+	m.msgdata = b
 	return
 }
 
@@ -191,7 +191,7 @@ func fillChunkHeader0(b []byte, csid uint32, timestamp uint32, msgtypeid uint8, 
 	return
 }
 
-func (self *Conn) fillChunkHeader3(b []byte, csid uint32, timestamp uint32) (n int) {
+func (c *Conn) fillChunkHeader3(b []byte, csid uint32, timestamp uint32) (n int) {
 	pio.WriteU8(b, &n, (byte(csid)&0x3f)|3<<6)
 	if timestamp >= ffffff {
 		pio.WriteU32BE(b, &n, timestamp)
@@ -215,20 +215,20 @@ func (self *Conn) fillChunkHeader3(b []byte, csid uint32, timestamp uint32) (n i
 // 	return nil
 // }
 
-func (self *Conn) readMsg() (msg *message, err error) {
+func (c *Conn) readMsg() (msg *message, err error) {
 	for {
-		if msg, err = self.readChunk(); err != nil {
+		if msg, err = c.readChunk(); err != nil {
 			return
 		}
 
-		if self.readAckSize != 0 && self.ackn-self.lastackn > self.readAckSize {
-			if err = self.writeAck(self.ackn); err != nil {
+		if c.readAckSize != 0 && c.ackn-c.lastackn > c.readAckSize {
+			if err = c.writeAck(c.ackn); err != nil {
 				return
 			}
-			if err = self.flushWrite(); err != nil {
+			if err = c.flushWrite(); err != nil {
 				return
 			}
-			self.lastackn = self.ackn
+			c.lastackn = c.ackn
 		}
 
 		if msg != nil {
@@ -237,50 +237,50 @@ func (self *Conn) readMsg() (msg *message, err error) {
 	}
 }
 
-func (self *Conn) debugWriteMsg(msg *message) {
-	if fn := self.LogMsgEvent; fn != nil {
+func (c *Conn) debugWriteMsg(msg *message) {
+	if fn := c.LogMsgEvent; fn != nil {
 		fn(false, *msg)
 	}
 }
 
-func (self *Conn) debugReadMsg(msg *message) {
-	if fn := self.LogMsgEvent; fn != nil {
+func (c *Conn) debugReadMsg(msg *message) {
+	if fn := c.LogMsgEvent; fn != nil {
 		fn(true, *msg)
 	}
 }
 
-func (self *Conn) readMsgHandleEvent() (msg *message, err error) {
+func (c *Conn) readMsgHandleEvent() (msg *message, err error) {
 	for {
 		for {
-			if self.aggmsg != nil {
+			if c.aggmsg != nil {
 				var got bool
-				if got, msg, err = self.nextAggPart(self.aggmsg); err != nil {
+				if got, msg, err = c.nextAggPart(c.aggmsg); err != nil {
 					return
 				}
 				if got {
 					break
 				} else {
-					self.aggmsg = nil
+					c.aggmsg = nil
 				}
 			}
-			if msg, err = self.readMsg(); err != nil {
+			if msg, err = c.readMsg(); err != nil {
 				return
 			}
 			if msg.msgtypeid == msgtypeidAggregate {
-				self.aggmsg = msg
+				c.aggmsg = msg
 			} else {
 				break
 			}
 		}
 
-		self.debugReadMsg(msg)
+		c.debugReadMsg(msg)
 
 		var handled bool
-		if handled, err = self.handleEvent(msg); err != nil {
+		if handled, err = c.handleEvent(msg); err != nil {
 			return
 		}
 		if handled {
-			if err = self.flushWrite(); err != nil {
+			if err = c.flushWrite(); err != nil {
 				return
 			}
 		} else {
@@ -289,9 +289,9 @@ func (self *Conn) readMsgHandleEvent() (msg *message, err error) {
 	}
 }
 
-func (self *Conn) readChunk() (msg *message, err error) {
-	b := self.readbuf
-	if _, err = self.wrapRW.Read(b[:1]); err != nil {
+func (c *Conn) readChunk() (msg *message, err error) {
+	b := c.readbuf
+	if _, err = c.wrapRW.Read(b[:1]); err != nil {
 		return
 	}
 	header := b[0]
@@ -305,25 +305,25 @@ func (self *Conn) readChunk() (msg *message, err error) {
 	switch csid {
 	default: // Chunk basic header 1
 	case 0: // Chunk basic header 2
-		if _, err = self.wrapRW.Read(b[:1]); err != nil {
+		if _, err = c.wrapRW.Read(b[:1]); err != nil {
 			return
 		}
 		csid = uint32(b[0]) + 64
 	case 1: // Chunk basic header 3
-		if _, err = self.wrapRW.Read(b[:2]); err != nil {
+		if _, err = c.wrapRW.Read(b[:2]); err != nil {
 			return
 		}
 		csid = uint32(pio.U16BE(b)) + 64
 	}
 
 	newcs := false
-	cs := self.readcsmap[csid]
+	cs := c.readcsmap[csid]
 	if cs == nil {
 		cs = &message{}
-		self.readcsmap[csid] = cs
+		c.readcsmap[csid] = cs
 		newcs = true
 	}
-	if len(self.readcsmap) > 16 {
+	if len(c.readcsmap) > 16 {
 		err = fmt.Errorf("TooManyCsid")
 		return
 	}
@@ -348,7 +348,7 @@ func (self *Conn) readChunk() (msg *message, err error) {
 			return
 		}
 		h := b[:11]
-		if _, err = self.wrapRW.Read(h); err != nil {
+		if _, err = c.wrapRW.Read(h); err != nil {
 			return
 		}
 		timestamp = pio.U24BE(h[0:3])
@@ -357,7 +357,7 @@ func (self *Conn) readChunk() (msg *message, err error) {
 		cs.msgtypeid = h[6]
 		cs.msgsid = pio.U32LE(h[7:11])
 		if timestamp == ffffff {
-			if _, err = self.wrapRW.Read(b[:4]); err != nil {
+			if _, err = c.wrapRW.Read(b[:4]); err != nil {
 				return
 			}
 			timestamp = pio.U32BE(b)
@@ -390,7 +390,7 @@ func (self *Conn) readChunk() (msg *message, err error) {
 			return
 		}
 		h := b[:7]
-		if _, err = self.wrapRW.Read(h); err != nil {
+		if _, err = c.wrapRW.Read(h); err != nil {
 			return
 		}
 		timestamp = pio.U24BE(h[0:3])
@@ -398,7 +398,7 @@ func (self *Conn) readChunk() (msg *message, err error) {
 		cs.msgdatalen = pio.U24BE(h[3:6])
 		cs.msgtypeid = h[6]
 		if timestamp == ffffff {
-			if _, err = self.wrapRW.Read(b[:4]); err != nil {
+			if _, err = c.wrapRW.Read(b[:4]); err != nil {
 				return
 			}
 			timestamp = pio.U32BE(b)
@@ -430,13 +430,13 @@ func (self *Conn) readChunk() (msg *message, err error) {
 			return
 		}
 		h := b[:3]
-		if _, err = self.wrapRW.Read(h); err != nil {
+		if _, err = c.wrapRW.Read(h); err != nil {
 			return
 		}
 		cs.msghdrtype = msghdrtype
 		timestamp = pio.U24BE(h[0:3])
 		if timestamp == ffffff {
-			if _, err = self.wrapRW.Read(b[:4]); err != nil {
+			if _, err = c.wrapRW.Read(b[:4]); err != nil {
 				return
 			}
 			timestamp = pio.U32BE(b)
@@ -460,7 +460,7 @@ func (self *Conn) readChunk() (msg *message, err error) {
 			switch cs.msghdrtype {
 			case 0:
 				if cs.hastimeext {
-					if _, err = self.wrapRW.Read(b[:4]); err != nil {
+					if _, err = c.wrapRW.Read(b[:4]); err != nil {
 						return
 					}
 					timestamp = pio.U32BE(b)
@@ -469,7 +469,7 @@ func (self *Conn) readChunk() (msg *message, err error) {
 				}
 			case 1, 2:
 				if cs.hastimeext {
-					if _, err = self.wrapRW.Read(b[:4]); err != nil {
+					if _, err = c.wrapRW.Read(b[:4]); err != nil {
 						return
 					}
 					timestamp = pio.U32BE(b)
@@ -484,11 +484,11 @@ func (self *Conn) readChunk() (msg *message, err error) {
 		} else {
 			if cs.hastimeext {
 				var b []byte
-				if b, err = self.wrapRW.Peek(4); err != nil {
+				if b, err = c.wrapRW.Peek(4); err != nil {
 					return
 				}
 				if pio.U32BE(b) == cs.timeext {
-					if _, err = self.wrapRW.Read(b[:4]); err != nil {
+					if _, err = c.wrapRW.Read(b[:4]); err != nil {
 						return
 					}
 				}
@@ -501,17 +501,17 @@ func (self *Conn) readChunk() (msg *message, err error) {
 	}
 
 	size := int(cs.msgdataleft)
-	if size > self.ReadMaxChunkSize {
-		size = self.ReadMaxChunkSize
+	if size > c.ReadMaxChunkSize {
+		size = c.ReadMaxChunkSize
 	}
 	off := cs.msgdatalen - cs.msgdataleft
 	buf := cs.msgdata[off : int(off)+size]
-	if _, err = self.wrapRW.Read(buf); err != nil {
+	if _, err = c.wrapRW.Read(buf); err != nil {
 		return
 	}
 	cs.msgdataleft -= uint32(size)
 
-	if fn := self.LogChunkHeaderEvent; fn != nil {
+	if fn := c.LogChunkHeaderEvent; fn != nil {
 		fn(true, *cs)
 	}
 
@@ -524,50 +524,50 @@ func (self *Conn) readChunk() (msg *message, err error) {
 	return
 }
 
-func (self *Conn) startPeekReadLoop() {
-	if self.writing() {
+func (c *Conn) startPeekReadLoop() {
+	if c.writing() {
 		go func() {
-			io.Copy(ioutil.Discard, self.wrapRW.rw)
-			self.closeNotify <- true
+			io.Copy(ioutil.Discard, c.wrapRW.rw)
+			c.closeNotify <- true
 		}()
 	}
 }
 
-func (self *Conn) readCommand() (cmd *command, err error) {
+func (c *Conn) readCommand() (cmd *command, err error) {
 	for {
 		var msg *message
-		if msg, err = self.readMsgHandleEvent(); err != nil {
+		if msg, err = c.readMsgHandleEvent(); err != nil {
 			return
 		}
 		if cmd, err = msg.parseCommand(); err != nil {
 			return
 		}
 		if cmd != nil {
-			self.lastcmd = cmd
+			c.lastcmd = cmd
 			return
 		}
 	}
 }
 
-func (self *Conn) ReadTag() (tag flvio.Tag, err error) {
-	if tag, err = self.rtmpReadTag(); err != nil {
+func (c *Conn) ReadTag() (tag flvio.Tag, err error) {
+	if tag, err = c.rtmpReadTag(); err != nil {
 		return
 	}
 
-	if fn := self.LogTagEvent; fn != nil {
+	if fn := c.LogTagEvent; fn != nil {
 		fn(true, tag)
 	}
 	return
 }
 
-func (self *Conn) rtmpReadTag() (tag flvio.Tag, err error) {
+func (c *Conn) rtmpReadTag() (tag flvio.Tag, err error) {
 	for {
 		var msg *message
-		if msg, err = self.readMsgHandleEvent(); err != nil {
+		if msg, err = c.readMsgHandleEvent(); err != nil {
 			return
 		}
 		var _tag *flvio.Tag
-		if _tag, err = msg.parseTag(self.BypassMsgtypeid); err != nil {
+		if _tag, err = msg.parseTag(c.BypassMsgtypeid); err != nil {
 			return
 		}
 		if _tag != nil {
@@ -577,105 +577,105 @@ func (self *Conn) rtmpReadTag() (tag flvio.Tag, err error) {
 	}
 }
 
-func (self *Conn) tmpwbuf(n int) []byte {
-	if cap(self.writebuf) < n {
-		self.writebuf = make([]byte, 0, n)
+func (c *Conn) tmpwbuf(n int) []byte {
+	if cap(c.writebuf) < n {
+		c.writebuf = make([]byte, 0, n)
 	}
-	return self.writebuf[:n]
+	return c.writebuf[:n]
 }
 
-func (self *Conn) tmpwbuf2(n int) []byte {
-	if cap(self.writebuf2) < n {
-		self.writebuf2 = make([]byte, 0, n)
+func (c *Conn) tmpwbuf2(n int) []byte {
+	if cap(c.writebuf2) < n {
+		c.writebuf2 = make([]byte, 0, n)
 	}
-	return self.writebuf2[:n]
+	return c.writebuf2[:n]
 }
 
-func (self *Conn) tmprbuf2(n int) []byte {
-	if cap(self.readbuf2) < n {
-		self.readbuf2 = make([]byte, 0, n)
+func (c *Conn) tmprbuf2(n int) []byte {
+	if cap(c.readbuf2) < n {
+		c.readbuf2 = make([]byte, 0, n)
 	}
-	return self.readbuf2[:n]
+	return c.readbuf2[:n]
 }
 
-func (self *Conn) TmpwbufData(n int) []byte {
-	return self.tmpwbuf2(n)
+func (c *Conn) TmpwbufData(n int) []byte {
+	return c.tmpwbuf2(n)
 }
 
-func (self *Conn) setAndWriteChunkSize(size int) (err error) {
-	self.writeMaxChunkSize = size
-	return self.WriteSetChunkSize(size, self.wrapRW.write)
+func (c *Conn) setAndWriteChunkSize(size int) (err error) {
+	c.writeMaxChunkSize = size
+	return c.WriteSetChunkSize(size, c.wrapRW.write)
 }
 
-func (self *Conn) WriteSetChunkSize(size int, write func([]byte) error) (err error) {
-	b := self.tmpwbuf2(4)
+func (c *Conn) WriteSetChunkSize(size int, write func([]byte) error) (err error) {
+	b := c.tmpwbuf2(4)
 	pio.PutU32BE(b[0:4], uint32(size))
-	return self.writeEvent2(msgtypeidSetChunkSize, b, write)
+	return c.writeEvent2(msgtypeidSetChunkSize, b, write)
 }
 
-func (self *Conn) writeAck(seqnum uint32) (err error) {
-	b := self.tmpwbuf2(4)
+func (c *Conn) writeAck(seqnum uint32) (err error) {
+	b := c.tmpwbuf2(4)
 	pio.PutU32BE(b[0:4], seqnum)
-	return self.WriteEvent(msgtypeidAck, b)
+	return c.WriteEvent(msgtypeidAck, b)
 }
 
-func (self *Conn) writeWindowAckSize(size uint32) (err error) {
-	b := self.tmpwbuf2(4)
+func (c *Conn) writeWindowAckSize(size uint32) (err error) {
+	b := c.tmpwbuf2(4)
 	pio.PutU32BE(b[0:4], size)
-	return self.WriteEvent(msgtypeidWindowAckSize, b)
+	return c.WriteEvent(msgtypeidWindowAckSize, b)
 }
 
-func (self *Conn) writeSetPeerBandwidth(acksize uint32, limittype uint8) (err error) {
-	b := self.tmpwbuf2(5)
+func (c *Conn) writeSetPeerBandwidth(acksize uint32, limittype uint8) (err error) {
+	b := c.tmpwbuf2(5)
 	pio.PutU32BE(b[0:4], acksize)
 	b[4] = limittype
-	return self.WriteEvent(msgtypeidSetPeerBandwidth, b)
+	return c.WriteEvent(msgtypeidSetPeerBandwidth, b)
 }
 
-func (self *Conn) writePingResponse(timestamp uint32) (err error) {
-	b := self.tmpwbuf2(6)
+func (c *Conn) writePingResponse(timestamp uint32) (err error) {
+	b := c.tmpwbuf2(6)
 	pio.PutU16BE(b[0:2], eventtypePingResponse)
 	pio.PutU32BE(b[2:6], timestamp)
-	return self.WriteEvent(msgtypeidUserControl, b)
+	return c.WriteEvent(msgtypeidUserControl, b)
 }
 
-func (self *Conn) writeStreamIsRecorded(msgsid uint32) (err error) {
-	b := self.tmpwbuf2(6)
+func (c *Conn) writeStreamIsRecorded(msgsid uint32) (err error) {
+	b := c.tmpwbuf2(6)
 	pio.PutU16BE(b[0:2], eventtypeStreamIsRecorded)
 	pio.PutU32BE(b[2:6], msgsid)
-	return self.WriteEvent(msgtypeidUserControl, b)
+	return c.WriteEvent(msgtypeidUserControl, b)
 }
 
-func (self *Conn) writeStreamBegin(msgsid uint32) (err error) {
-	b := self.tmpwbuf2(6)
+func (c *Conn) writeStreamBegin(msgsid uint32) (err error) {
+	b := c.tmpwbuf2(6)
 	pio.PutU16BE(b[0:2], eventtypeStreamBegin)
 	pio.PutU32BE(b[2:6], msgsid)
-	return self.WriteEvent(msgtypeidUserControl, b)
+	return c.WriteEvent(msgtypeidUserControl, b)
 }
 
-func (self *Conn) writeSetBufferLength(msgsid uint32, timestamp uint32) (err error) {
-	b := self.tmpwbuf2(10)
+func (c *Conn) writeSetBufferLength(msgsid uint32, timestamp uint32) (err error) {
+	b := c.tmpwbuf2(10)
 	pio.PutU16BE(b[0:2], eventtypeSetBufferLength)
 	pio.PutU32BE(b[2:6], msgsid)
 	pio.PutU32BE(b[6:10], timestamp)
-	return self.WriteEvent(msgtypeidUserControl, b)
+	return c.WriteEvent(msgtypeidUserControl, b)
 }
 
-func (self *Conn) writeCommand(csid, msgsid uint32, args ...interface{}) (err error) {
-	return self.writeMsg(csid, message{
+func (c *Conn) writeCommand(csid, msgsid uint32, args ...interface{}) (err error) {
+	return c.writeMsg(csid, message{
 		msgtypeid: msgtypeidCommandMsgAMF0,
 		msgsid:    msgsid,
-		msgdata:   self.fillAMF0Vals(args),
+		msgdata:   c.fillAMF0Vals(args),
 	}, nil)
 }
 
-func (self *Conn) fillAMF0Vals(args []interface{}) []byte {
-	b := self.tmpwbuf2(flvio.FillAMF0Vals(nil, args))
+func (c *Conn) fillAMF0Vals(args []interface{}) []byte {
+	b := c.tmpwbuf2(flvio.FillAMF0Vals(nil, args))
 	flvio.FillAMF0Vals(b, args)
 	return b
 }
 
-func (self *Conn) writeMsg2(
+func (c *Conn) writeMsg2(
 	csid uint32, msg message,
 	fillheader func([]byte) int,
 	write func([]byte) error,
@@ -685,7 +685,7 @@ func (self *Conn) writeMsg2(
 		fillheader = func(b []byte) int { return 0 }
 	}
 
-	b := self.tmpwbuf(chunkHeader0Length + fillheader(nil))
+	b := c.tmpwbuf(chunkHeader0Length + fillheader(nil))
 	chdrlen := fillChunkHeader0(b, csid, msg.timenow, msg.msgtypeid, msg.msgsid, 0)
 	taghdrlen := fillheader(b[chdrlen:])
 	msg.msgdatalen = uint32(taghdrlen + len(msg.msgdata))
@@ -696,9 +696,9 @@ func (self *Conn) writeMsg2(
 		return
 	}
 
-	chunkleft := self.writeMaxChunkSize - taghdrlen
+	chunkleft := c.writeMaxChunkSize - taghdrlen
 	if chunkleft < 0 {
-		panic(fmt.Sprintf("TagHdrTooLong(%d,%d)", self.writeMaxChunkSize, taghdrlen))
+		panic(fmt.Sprintf("TagHdrTooLong(%d,%d)", c.writeMaxChunkSize, taghdrlen))
 	}
 	msg.msgdataleft -= uint32(taghdrlen)
 
@@ -706,7 +706,7 @@ func (self *Conn) writeMsg2(
 
 	for msg.msgdataleft > 0 {
 		if i > 0 {
-			n := self.fillChunkHeader3(b, csid, msg.timenow)
+			n := c.fillChunkHeader3(b, csid, msg.timenow)
 			if err = write(b[:n]); err != nil {
 				return
 			}
@@ -725,7 +725,7 @@ func (self *Conn) writeMsg2(
 		msg.msgdataleft -= uint32(n)
 
 		if chunkleft == 0 {
-			chunkleft = self.writeMaxChunkSize
+			chunkleft = c.writeMaxChunkSize
 		}
 
 		i++
@@ -738,25 +738,25 @@ func (self *Conn) writeMsg2(
 	return nil
 }
 
-func (self *Conn) writeMsg(csid uint32, msg message, fillheader func([]byte) int) (err error) {
-	self.debugWriteMsg(&msg)
+func (c *Conn) writeMsg(csid uint32, msg message, fillheader func([]byte) int) (err error) {
+	c.debugWriteMsg(&msg)
 
 	progress := func(msg message) {
-		if fn := self.LogChunkHeaderEvent; fn != nil {
+		if fn := c.LogChunkHeaderEvent; fn != nil {
 			fn(false, msg)
 		}
 	}
 
-	if err = self.writeMsg2(csid, msg, fillheader, self.wrapRW.write, progress); err != nil {
+	if err = c.writeMsg2(csid, msg, fillheader, c.wrapRW.write, progress); err != nil {
 		return
 	}
 
 	return
 }
 
-func (self *Conn) WriteTag(tag flvio.Tag) (err error) {
-	if self.LogTagEvent != nil {
-		self.LogTagEvent(false, tag)
+func (c *Conn) WriteTag(tag flvio.Tag) (err error) {
+	if c.LogTagEvent != nil {
+		c.LogTagEvent(false, tag)
 	}
 
 	var csid uint32
@@ -767,15 +767,15 @@ func (self *Conn) WriteTag(tag flvio.Tag) (err error) {
 	} else {
 		csid = 5
 	}
-	return self.writeMsg(csid, message{
+	return c.writeMsg(csid, message{
 		msgtypeid: uint8(tag.Type),
 		msgdata:   tag.Data,
-		msgsid:    self.avmsgsid,
+		msgsid:    c.avmsgsid,
 		timenow:   tag.Time,
 	}, tag.FillHeader)
 }
 
-func (self *message) arrToCommand(arr []interface{}) (cmd *command, err error) {
+func (c *message) arrToCommand(arr []interface{}) (cmd *command, err error) {
 	if len(arr) < 2 {
 		err = fmt.Errorf("CmdLenInvalid")
 		return
@@ -802,37 +802,37 @@ func (self *message) arrToCommand(arr []interface{}) (cmd *command, err error) {
 	return
 }
 
-func (self *message) parseCommand() (cmd *command, err error) {
-	switch self.msgtypeid {
+func (c *message) parseCommand() (cmd *command, err error) {
+	switch c.msgtypeid {
 	case msgtypeidCommandMsgAMF0, msgtypeidCommandMsgAMF3:
-		amf3 := self.msgtypeid == msgtypeidCommandMsgAMF3
+		amf3 := c.msgtypeid == msgtypeidCommandMsgAMF3
 		var arr []interface{}
-		if arr, err = flvio.ParseAMFVals(self.msgdata, amf3); err != nil {
+		if arr, err = flvio.ParseAMFVals(c.msgdata, amf3); err != nil {
 			return
 		}
-		if cmd, err = self.arrToCommand(arr); err != nil {
+		if cmd, err = c.arrToCommand(arr); err != nil {
 			return
 		}
 	}
 	return
 }
 
-func (self *message) parseTag(bypass []uint8) (tag *flvio.Tag, err error) {
+func (c *message) parseTag(bypass []uint8) (tag *flvio.Tag, err error) {
 	for _, id := range bypass {
-		if id == self.msgtypeid {
+		if id == c.msgtypeid {
 			tag = &flvio.Tag{
-				Type: self.msgtypeid,
-				Time: self.timenow,
-				Data: self.msgdata,
+				Type: c.msgtypeid,
+				Time: c.timenow,
+				Data: c.msgdata,
 			}
 			return
 		}
 	}
 
-	switch self.msgtypeid {
+	switch c.msgtypeid {
 	case msgtypeidVideoMsg, msgtypeidAudioMsg:
-		_tag := flvio.Tag{Type: self.msgtypeid, Time: self.timenow}
-		if err = _tag.Parse(self.msgdata); err != nil {
+		_tag := flvio.Tag{Type: c.msgtypeid, Time: c.timenow}
+		if err = _tag.Parse(c.msgdata); err != nil {
 			err = nil
 			return
 		}
@@ -841,9 +841,9 @@ func (self *message) parseTag(bypass []uint8) (tag *flvio.Tag, err error) {
 
 	case msgtypeidDataMsgAMF0, msgtypeidDataMsgAMF3:
 		tag = &flvio.Tag{
-			Type: self.msgtypeid,
-			Time: self.timenow,
-			Data: self.msgdata,
+			Type: c.msgtypeid,
+			Time: c.timenow,
+			Data: c.msgdata,
 		}
 		return
 	}
@@ -851,18 +851,18 @@ func (self *message) parseTag(bypass []uint8) (tag *flvio.Tag, err error) {
 	return
 }
 
-func (self *Conn) writeEvent2(msgtypeid uint8, b []byte, write func([]byte) error) (err error) {
-	return self.writeMsg2(2, message{
+func (c *Conn) writeEvent2(msgtypeid uint8, b []byte, write func([]byte) error) (err error) {
+	return c.writeMsg2(2, message{
 		msgtypeid: msgtypeid,
 		msgdata:   b,
 	}, nil, write, nil)
 }
 
-func (self *Conn) WriteEvent(msgtypeid uint8, b []byte) (err error) {
-	return self.writeEvent2(msgtypeid, b, self.wrapRW.write)
+func (c *Conn) WriteEvent(msgtypeid uint8, b []byte) (err error) {
+	return c.writeEvent2(msgtypeid, b, c.wrapRW.write)
 }
 
-func (self *Conn) handleEvent(msg *message) (handled bool, err error) {
+func (c *Conn) handleEvent(msg *message) (handled bool, err error) {
 	switch msg.msgtypeid {
 	case msgtypeidSetChunkSize:
 		var n int
@@ -875,7 +875,7 @@ func (self *Conn) handleEvent(msg *message) (handled bool, err error) {
 			return
 		}
 		handled = true
-		self.ReadMaxChunkSize = int(v)
+		c.ReadMaxChunkSize = int(v)
 		return
 
 	case msgtypeidWindowAckSize:
@@ -885,7 +885,7 @@ func (self *Conn) handleEvent(msg *message) (handled bool, err error) {
 			return
 		}
 		handled = true
-		self.readAckSize = acksize
+		c.readAckSize = acksize
 		return
 
 	case msgtypeidUserControl:
@@ -902,13 +902,13 @@ func (self *Conn) handleEvent(msg *message) (handled bool, err error) {
 				return
 			}
 			handled = true
-			err = self.writePingResponse(timestamp)
+			err = c.writePingResponse(timestamp)
 			return
 		}
 
 	default:
-		if self.HandleEvent != nil {
-			return self.HandleEvent(msg.msgtypeid, msg.msgdata)
+		if c.HandleEvent != nil {
+			return c.HandleEvent(msg.msgtypeid, msg.msgdata)
 		}
 	}
 
