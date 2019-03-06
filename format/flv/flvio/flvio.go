@@ -17,40 +17,11 @@ func TimeToTs(tm time.Duration) int64 {
 	return int64(tm / time.Millisecond)
 }
 
-var AudioFormatString = []string{
-	"LinearPCM",
-	"ADPCM",
-	"MP3",
-	"LinearPCML",
-	"Nellymoser16K",
-	"Nellymoser8K",
-	"Nellymoser",
-	"G711A",
-	"G711U",
-	"Reserved",
-	"AAC",
-	"Speex",
-	"MP38K",
-}
-
-var VideoFormatString = []string{
-	" ",
-	"JPEG",
-	"Sorenson H.263",
-	"Screen video",
-	"On2 VP6",
-	"On2 VP6 with alpha channel",
-	"Screen video version 2",
-	"AVC",
-}
-
 const (
 	TAG_AUDIO = 8
 	TAG_VIDEO = 9
 	TAG_AMF0  = 18
 	TAG_AMF3  = 15
-
-	TAG_PRIV = 65
 )
 
 func TagTypeString(v uint8) string {
@@ -201,8 +172,8 @@ type Tag struct {
 	*/
 	AVCPacketType uint8
 
-	Time            uint32
-	CompositionTime int32
+	Time  uint32
+	CTime int32
 
 	StreamId uint32
 
@@ -226,9 +197,9 @@ func (self Tag) DebugFields() []interface{} {
 			p = append(p, self.AVCPacketType)
 		}
 
-		if self.CompositionTime != 0 {
+		if self.CTime != 0 {
 			p = append(p, "Ctime")
-			p = append(p, self.CompositionTime)
+			p = append(p, self.CTime)
 		}
 
 	case TAG_AMF0, TAG_AMF3:
@@ -301,7 +272,7 @@ func (t *Tag) parseVideoHeader(b []byte) (n int, err error) {
 		if v, err = pio.ReadI24BE(b, &n); err != nil {
 			return
 		}
-		t.CompositionTime = v
+		t.CTime = v
 	}
 
 	return
@@ -313,7 +284,7 @@ func (t Tag) fillVideoHeader(b []byte) (n int) {
 	switch t.VideoFormat {
 	case VIDEO_H264, VIDEO_H265:
 		pio.WriteU8(b, &n, t.AVCPacketType)
-		pio.WriteI24BE(b, &n, int32(t.CompositionTime))
+		pio.WriteI24BE(b, &n, int32(t.CTime))
 	}
 	return
 }

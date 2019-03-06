@@ -1,6 +1,7 @@
 package av
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/nareix/joy5/codec/aac"
@@ -15,6 +16,14 @@ const (
 	AACDecoderConfig
 )
 
+var PacketTypeString = map[int]string{
+	H264:              "H264",
+	AAC:               "AAC",
+	H264DecoderConfig: "H264DecoderConfig",
+	H264SPSPPSNALU:    "H264SPSPPSNALU",
+	AACDecoderConfig:  "AACDecoderConfig",
+}
+
 type Packet struct {
 	Type       int
 	IsKeyFrame bool
@@ -26,12 +35,37 @@ type Packet struct {
 	H264       *h264.Codec
 }
 
-// StoreBlockUpdate -> GateBlockUpdate -> Snapshot
+func (p Packet) String() string {
+	ret := ""
 
-// RTMP -> SortMerger -> H264KeyAddExtra
+	typeStr := PacketTypeString[p.Type]
+	if typeStr == "" {
+		typeStr = "UnknownPacketType"
+	}
+	ret += typeStr
+
+	if p.IsKeyFrame {
+		ret += " K"
+	}
+
+	ret += " " + fmt.Sprint(p.Time)
+
+	if p.CTime != 0 {
+		ret += " " + fmt.Sprint(p.CTime)
+	}
+
+	ret += " " + fmt.Sprint(len(p.Data))
+
+	return ret
+}
 
 type PacketReader interface {
 	ReadPacket() (Packet, error)
+}
+
+type PacketReadCloser interface {
+	PacketReader
+	Close() error
 }
 
 type PacketWriter interface {

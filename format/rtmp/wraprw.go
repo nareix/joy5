@@ -9,6 +9,7 @@ import (
 type wrapReadWriter struct {
 	conn *Conn
 	br   *bufio.Reader
+	rw   ReadWriteFlusher
 }
 
 func (r *wrapReadWriter) Peek(n int) (b []byte, err error) {
@@ -20,18 +21,10 @@ func (r *wrapReadWriter) Read(b []byte) (n int, err error) {
 		return 0, err
 	}
 
-	atomic.AddInt64(&r.conn.rawbytes, int64(len(b)))
 	r.conn.ackn += uint32(n)
 
-	if r.conn.HandleRead != nil {
-		r.conn.HandleRead(b)
-	}
-	if DebugChunkData {
-		r.conn.Logger.HexdumpInfo("Read", b)
-	}
-
-	if r.conn.HookOnRead != nil {
-		r.conn.HookOnRead(b)
+	if fn := r.conn.LogChunkDataEvent; fn != nil {
+		fn(true, b)
 	}
 
 	return
@@ -43,20 +36,28 @@ func (r *wrapReadWriter) write(b []byte) (err error) {
 }
 
 func (r *wrapReadWriter) Write(b []byte) (n int, err error) {
-	if n, err = r.conn.RW.Write(b); err != nil {
+	if n, err = r.rw.Write(b); err != nil {
 		return
 	}
+
 	atomic.AddInt64(&r.conn.rawbytes, int64(len(b)))
 	atomic.AddInt64(&r.conn.BytesSent, int64(len(b)))
-	if DebugChunkData {
-		r.conn.Logger.HexdumpInfo("Write", b)
+
+	if fn := r.conn.LogChunkDataEvent; fn != nil {
+		fn(false, b)
 	}
+
 	return
 }
 
-func newWrapReadWriter(conn *Conn) *wrapReadWriter {
+func (r *wrapReadWriter) Flush() (err error) {
+	return r.rw.Flush()
+}
+
+func newWrapReadWriter(conn *Conn, rw ReadWriteFlusher) *wrapReadWriter {
 	return &wrapReadWriter{
 		conn: conn,
-		br:   bufio.NewReaderSize(conn.RW, 4),
+		br:   bufio.NewReaderSize(rw, 4),
+		rw:   rw,
 	}
 }

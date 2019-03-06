@@ -3,14 +3,22 @@
 	"ignore": "test",
 	"package": [
 		{
-			"path": "github.com/googollee/go-assert",
-			"revision": ""
+			"checksumSHA1": "40vJyUB4ezQSn/NSadsKEOrudMc=",
+			"path": "github.com/inconshreveable/mousetrap",
+			"revision": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75",
+			"revisionTime": "2014-10-17T20:07:13Z"
 		},
 		{
-			"checksumSHA1": "ByRdQMv2yl16W6Tp9gUW1nNmpuI=",
-			"path": "github.com/hashicorp/errwrap",
-			"revision": "8a6fb523712970c966eefc6b39ed2c5e74880354",
-			"revisionTime": "2018-08-24T00:39:10Z"
+			"checksumSHA1": "WYd7aI5YkeiRSv5pqr12emezBIg=",
+			"path": "github.com/spf13/cobra",
+			"revision": "7547e83b2d85fd1893c7d76916f67689d761fecb",
+			"revisionTime": "2019-01-09T00:34:09Z"
+		},
+		{
+			"checksumSHA1": "VK+UsykzUMkaKl2ankiyutolraE=",
+			"path": "github.com/spf13/pflag",
+			"revision": "24fa6976df40757dce6aea913e7b81ade90530e1",
+			"revisionTime": "2018-12-23T18:29:23Z"
 		}
 	],
 	"rootPath": "github.com/nareix/joy5"

@@ -1,11 +1,38 @@
 package rtmp
 
 import (
-	"github.com/hashicorp/errwrap"
+	"fmt"
+
 	"github.com/nareix/joy5/av"
 	"github.com/nareix/joy5/format/flv"
 	"github.com/nareix/joy5/format/flv/flvio"
 )
+
+const (
+	StageInit = iota
+	StageHandshakeDone
+	StageGotPublishOrPlayCommand
+	StageCommandDone
+	StageDataStart
+)
+
+const (
+	PrepareReading = iota + 1
+	PrepareWriting
+)
+
+type Stage int
+
+var stagestrs = map[Stage]string{
+	StageHandshakeDone:           "StageHandshakeDone",
+	StageGotPublishOrPlayCommand: "StageGotPublishOrPlayCommand",
+	StageCommandDone:             "StageCommandDone",
+	StageDataStart:               "StageDataStart",
+}
+
+func (s Stage) String() string {
+	return stagestrs[s]
+}
 
 func (c *Conn) writeBasicConf() (err error) {
 	if err = c.writeWindowAckSize(2500000); err != nil {
@@ -29,7 +56,6 @@ func (c *Conn) writeDataStart() (err error) {
 					{K: "level", V: "status"},
 					{K: "code", V: "NetStream.Play.PublishNotify"},
 					{K: "description", V: "publish notify"},
-					{K: "reqid", V: c.ID()},
 				},
 			); err != nil {
 				return
@@ -55,7 +81,6 @@ func (c *Conn) writePublishOrPlayResult(ok bool, msg string) (err error) {
 					{K: "level", V: "status"},
 					{K: "code", V: "NetStream.Play.Failed"},
 					{K: "description", V: msg},
-					{K: "reqid", V: c.ID()},
 				},
 			); err != nil {
 				return
@@ -74,7 +99,6 @@ func (c *Conn) writePublishOrPlayResult(ok bool, msg string) (err error) {
 					{K: "level", V: "status"},
 					{K: "code", V: "NetStream.Play.Reset"},
 					{K: "description", V: "play reset"},
-					{K: "reqid", V: c.ID()},
 				}); err != nil {
 				return
 			}
@@ -85,7 +109,6 @@ func (c *Conn) writePublishOrPlayResult(ok bool, msg string) (err error) {
 					{K: "level", V: "status"},
 					{K: "code", V: "NetStream.Play.Start"},
 					{K: "description", V: "play start"},
-					{K: "reqid", V: c.ID()},
 				},
 			); err != nil {
 				return
@@ -107,7 +130,6 @@ func (c *Conn) writePublishOrPlayResult(ok bool, msg string) (err error) {
 					{K: "level", V: "status"},
 					{K: "code", V: "NetStream.Data.Start"},
 					{K: "description", V: "data start"},
-					{K: "reqid", V: c.ID()},
 				},
 			); err != nil {
 				return
@@ -121,7 +143,6 @@ func (c *Conn) writePublishOrPlayResult(ok bool, msg string) (err error) {
 					{K: "level", V: "status"},
 					{K: "code", V: "NetStream.Publish.Failed"},
 					{K: "description", V: msg},
-					{K: "reqid", V: c.ID()},
 				},
 			); err != nil {
 				return
@@ -133,7 +154,6 @@ func (c *Conn) writePublishOrPlayResult(ok bool, msg string) (err error) {
 					{K: "level", V: "status"},
 					{K: "code", V: "NetStream.Publish.Start"},
 					{K: "description", V: "publish start"},
-					{K: "reqid", V: c.ID()},
 				},
 			); err != nil {
 				return
@@ -157,11 +177,11 @@ func (c *Conn) readConnect() (err error) {
 	}
 
 	if cmd.name != "connect" {
-		err = errwrap.Errorf("FirstCommandNotConnect")
+		err = fmt.Errorf("FirstCommandNotConnect")
 		return
 	}
 	if cmd.obj == nil {
-		err = errwrap.Errorf("ConnectParamsInvalid")
+		err = fmt.Errorf("ConnectParamsInvalid")
 		return
 	}
 
@@ -169,7 +189,7 @@ func (c *Conn) readConnect() (err error) {
 	var connectpath string
 
 	if connectpath, ok = cmd.obj.GetString("app"); !ok {
-		err = errwrap.Errorf("ConnectMissingApp")
+		err = fmt.Errorf("ConnectMissingApp")
 		return
 	}
 
@@ -236,7 +256,7 @@ func (c *Conn) readConnect() (err error) {
 
 		case "publish":
 			if len(cmd.params) < 1 {
-				err = errwrap.Errorf("PublishParamsInvalid")
+				err = fmt.Errorf("PublishParamsInvalid")
 				return
 			}
 			publishpath, _ := cmd.params[0].(string)
@@ -250,7 +270,7 @@ func (c *Conn) readConnect() (err error) {
 
 		case "play":
 			if len(cmd.params) < 1 {
-				err = errwrap.Errorf("PlayParamsInvalid")
+				err = fmt.Errorf("PlayParamsInvalid")
 				return
 			}
 			playpath, _ := cmd.params[0].(string)
@@ -267,18 +287,18 @@ func (c *Conn) readConnect() (err error) {
 
 func (c *Conn) checkLevelStatus(cmd *command) (err error) {
 	if len(cmd.params) < 1 {
-		return errwrap.Errorf("NoParams")
+		return fmt.Errorf("NoParams")
 	}
 
 	obj, _ := cmd.params[0].(flvio.AMFMap)
 	if obj == nil {
-		return errwrap.Errorf("NoObj")
+		return fmt.Errorf("NoObj")
 	}
 
 	level, _ := obj.GetString("level")
 	if level != "status" {
 		code, _ := obj.GetString("code")
-		return errwrap.Errorf("CodeInvalid(%s)", code)
+		return fmt.Errorf("CodeInvalid(%s)", code)
 	}
 
 	return
@@ -326,7 +346,7 @@ func (c *Conn) writeConnect(path string) (err error) {
 
 		if cmd.name == "_result" {
 			if err = c.checkLevelStatus(cmd); err != nil {
-				err = errwrap.Wrapf("CommandConnectFailed", err)
+				err = fmt.Errorf("CommandConnectFailed: %s", err)
 				return
 			}
 			break
@@ -372,7 +392,7 @@ func (c *Conn) connectPublish() (err error) {
 		if cmd.name == "_result" && int(cmd.transid) == transid {
 			var ok bool
 			if ok, c.avmsgsid = c.checkCreateStreamResult(cmd); !ok {
-				err = errwrap.Errorf("CreateStreamFailed")
+				err = fmt.Errorf("CreateStreamFailed")
 				return
 			}
 			break
@@ -395,7 +415,7 @@ func (c *Conn) connectPublish() (err error) {
 		}
 		if cmd.name == "onStatus" {
 			if err = c.checkLevelStatus(cmd); err != nil {
-				err = errwrap.Wrapf("PublishFailed", err)
+				err = fmt.Errorf("PublishFailed: %s", err)
 				return
 			}
 			break
@@ -435,7 +455,7 @@ func (c *Conn) connectPlay() (err error) {
 		if cmd.name == "_result" {
 			var ok bool
 			if ok, c.avmsgsid = c.checkCreateStreamResult(cmd); !ok {
-				err = errwrap.Errorf("CreateStreamFailed")
+				err = fmt.Errorf("CreateStreamFailed")
 				return
 			}
 			break
@@ -456,7 +476,7 @@ func (c *Conn) connectPlay() (err error) {
 		}
 		if cmd.name == "onStatus" {
 			if err = c.checkLevelStatus(cmd); err != nil {
-				err = errwrap.Wrapf("PlayFailed", err)
+				err = fmt.Errorf("PlayFailed: %s", err)
 				return
 			}
 			break
@@ -485,65 +505,49 @@ func (c *Conn) WritePacket(pkt av.Packet) (err error) {
 	return flv.WritePacket(pkt, c.WriteTag)
 }
 
-func (c *Conn) ReadPacket() (pkt av.Packet, err error) {
-	if err = c.Prepare(StageCommandDone, PrepareReading); err != nil {
-		return
-	}
-
-	for {
-		var ok bool
-		if pkt, ok = c.TagToPkt.Pop(); ok {
-			break
-		}
-		var tag flvio.Tag
-		if tag, err = c.ReadTag(); err != nil {
-			return
-		}
-		c.TagToPkt.Do(tag)
-	}
-
-	if c.HookOnPacket != nil {
-		c.HookOnPacket()
-	}
-
-	return
-}
-
-func (c *Conn) debugPlayPub(event string) {
-	c.Logger.Info(event, "Url", c.URL, "LocalAddr", c.ConnLocalAddr, "RemoteAddr", c.ConnRemoteAddr)
-}
-
 func (c *Conn) debugStage(flags int, goturl bool) {
-	if DebugStage {
-		if goturl {
-			var event string
-			if c.isserver {
-				if c.Publishing {
-					event = "RtmpServerPublish"
-				} else {
-					event = "RtmpServerPlay"
-				}
+	if goturl {
+		var event string
+		if c.isserver {
+			if c.Publishing {
+				event = "RtmpServerPublish"
 			} else {
-				if flags == PrepareReading {
-					event = "RtmpDialPlay"
-				} else {
-					event = "RtmpDialPublish"
-				}
+				event = "RtmpServerPlay"
 			}
-			c.debugPlayPub(event)
 		} else {
-			c.Logger.Info("Rtmp" + c.Stage.String())
+			if flags == PrepareReading {
+				event = "RtmpDialPlay"
+			} else {
+				event = "RtmpDialPublish"
+			}
+		}
+		if c.LogStageEvent != nil {
+			c.LogStageEvent(event, c.URL.String())
+		}
+	} else {
+		event := "Rtmp" + c.Stage.String()
+		if c.LogStageEvent != nil {
+			c.LogStageEvent(event, "")
 		}
 	}
 }
 
 func (c *Conn) Prepare(stage Stage, flags int) (err error) {
-	if c.isFastRtmp {
-		return c.fastrtmpPrepare(stage, flags)
-	}
-
 	for c.Stage < stage {
 		switch c.Stage {
+		case StageInit:
+			if c.isserver {
+				if err = c.handshakeServer(); err != nil {
+					return
+				}
+			} else {
+				if err = c.handshakeClient(); err != nil {
+					return
+				}
+			}
+			c.Stage = StageHandshakeDone
+			return
+
 		case StageHandshakeDone:
 			if c.isserver {
 				if err = c.readConnect(); err != nil {
@@ -581,19 +585,6 @@ func (c *Conn) Prepare(stage Stage, flags int) (err error) {
 			}
 			c.debugStage(flags, false)
 		}
-
-	}
-
-	return
-}
-
-func (c *Conn) WritePacket(pkt av.Packet) (err error) {
-	if err = c.Prepare(StageDataStart, PrepareWriting); err != nil {
-		return
-	}
-
-	if err = c.PktToTag.Do(pkt, c.Publishing, c.WriteTag); err != nil {
-		return
 	}
 
 	return

@@ -5,9 +5,8 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"io"
-
-	"github.com/hashicorp/errwrap"
 
 	"github.com/nareix/joy5/utils/bits/pio"
 )
@@ -110,7 +109,7 @@ func (c *Conn) handshakeClient() (err error) {
 	digest := hsMakeDigest(hsClientPartialKey, C0C1[1:], gap)
 	copy(C0C1[gap+1:], digest)
 
-	if _, err = c.RW.Write(C0C1[:]); err != nil {
+	if _, err = c.wrapRW.rw.Write(C0C1[:]); err != nil {
 		return
 	}
 	if err = c.flushWrite(); err != nil {
@@ -119,7 +118,7 @@ func (c *Conn) handshakeClient() (err error) {
 
 	var S0S1S2 [1536*2 + 1]byte
 	var C2 [1536]byte
-	if _, err = io.ReadFull(c.RW, S0S1S2[:]); err != nil {
+	if _, err = io.ReadFull(c.wrapRW.rw, S0S1S2[:]); err != nil {
 		return
 	}
 
@@ -131,7 +130,7 @@ func (c *Conn) handshakeClient() (err error) {
 		hsCreate2(C2[:], digest2)
 	}
 
-	if _, err = c.RW.Write(C2[:]); err != nil {
+	if _, err = c.wrapRW.rw.Write(C2[:]); err != nil {
 		return
 	}
 
@@ -158,17 +157,17 @@ func (c *Conn) handshakeServer() (err error) {
 	S2 := S0S1S2[1536+1:]
 
 	// < C0
-	if _, err = io.ReadFull(c.RW, C0); err != nil {
+	if _, err = io.ReadFull(c.wrapRW.rw, C0); err != nil {
 		return
 	}
 
 	if C0[0] != 3 {
-		err = errwrap.Errorf("VersionInvalid(%d)", C0[0])
+		err = fmt.Errorf("VersionInvalid(%d)", C0[0])
 		return
 	}
 
 	// < C1
-	if _, err = io.ReadFull(c.RW, C1); err != nil {
+	if _, err = io.ReadFull(c.wrapRW.rw, C1); err != nil {
 		return
 	}
 
@@ -189,7 +188,7 @@ func (c *Conn) handshakeServer() (err error) {
 	}
 
 	// > S0S1S2
-	if _, err = c.RW.Write(S0S1S2); err != nil {
+	if _, err = c.wrapRW.rw.Write(S0S1S2); err != nil {
 		return
 	}
 	if err = c.flushWrite(); err != nil {
@@ -197,7 +196,7 @@ func (c *Conn) handshakeServer() (err error) {
 	}
 
 	// < C2
-	if _, err = io.ReadFull(c.RW, C2); err != nil {
+	if _, err = io.ReadFull(c.wrapRW.rw, C2); err != nil {
 		return
 	}
 

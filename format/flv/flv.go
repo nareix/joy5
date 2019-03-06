@@ -7,7 +7,6 @@ import (
 	"github.com/nareix/joy5/av"
 	"github.com/nareix/joy5/codec/aac"
 	"github.com/nareix/joy5/format/flv/flvio"
-	"github.com/nareix/joy5/utils"
 )
 
 const SetDataFrame = "@setDataFrame"
@@ -49,17 +48,13 @@ type Muxer struct {
 	filehdrwritten bool
 	HasVideo       bool
 	HasAudio       bool
-	Logger         *utils.Logger
 }
 
 func NewMuxer(w io.Writer) *Muxer {
 	m := &Muxer{
-		W:        w,
-		b:        make([]byte, 256),
-		PktToTag: NewPacketToTag(),
-		Logger:   utils.NewLogger(),
+		W: w,
+		b: make([]byte, 256),
 	}
-	m.PktToTag.Logger = m.Logger
 	return m
 }
 
@@ -88,8 +83,6 @@ func (self *Muxer) WriteTag(tag flvio.Tag) (err error) {
 	if err = self.WriteFileHeader(); err != nil {
 		return
 	}
-
-	DebugPrintTag("FlvWriteTag", tag)
 	return flvio.WriteTag(self.W, tag, self.b)
 }
 
@@ -150,7 +143,7 @@ func WritePacket(pkt av.Packet, writeTag func(flvio.Tag) error) (err error) {
 		return writeTag(tag)
 
 	case av.AACDecoderConfig:
-		tag := AACTagFromCodec2(pkt.AAC)
+		tag := AACTagFromCodec(pkt.AAC)
 		tag.AACPacketType = flvio.AAC_SEQHDR
 		tag.Data = pkt.Data
 		return writeTag(tag)
@@ -164,13 +157,10 @@ func (self *Muxer) WritePacket(pkt av.Packet) (err error) {
 }
 
 type Demuxer struct {
-	pktInput   *av.PacketInput
-	TagToPkt   *TagToPacket
 	r          io.Reader
 	b          []byte
 	gotfilehdr bool
 	Malloc     func(int) ([]byte, error)
-	Logger     *utils.Logger
 }
 
 func NewDemuxer(r io.Reader) *Demuxer {
@@ -180,10 +170,7 @@ func NewDemuxer(r io.Reader) *Demuxer {
 		Malloc: func(n int) ([]byte, error) {
 			return make([]byte, n), nil
 		},
-		Logger:   utils.NewLogger(),
-		TagToPkt: NewTagToPacket(),
 	}
-	d.TagToPkt.Logger = d.Logger
 	return d
 }
 
@@ -209,11 +196,9 @@ func (self *Demuxer) ReadTag() (tag flvio.Tag, err error) {
 	if err = self.ReadFileHeader(); err != nil {
 		return
 	}
-
 	if tag, err = flvio.ReadTag(self.r, self.b, self.Malloc); err != nil {
 		return
 	}
-	DebugPrintTag("FlvReadTag", tag)
 	return
 }
 
@@ -272,17 +257,4 @@ func ReadPacket(readTag func() (flvio.Tag, error)) (pkt av.Packet, err error) {
 
 func (self *Demuxer) ReadPacket() (pkt av.Packet, err error) {
 	return ReadPacket(self.ReadTag)
-}
-
-var DebugTagHeader = false
-var DebugTagData = false
-
-func DebugPrintTag(fn string, tag flvio.Tag) {
-	if DebugTagHeader {
-		utils.L.Info(append([]interface{}{fn}, tag.DebugFields()...)...)
-	}
-	if DebugTagData {
-		utils.L.Hexdump(tag.Header)
-		utils.L.Hexdump(tag.Data)
-	}
 }

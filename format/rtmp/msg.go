@@ -4,13 +4,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"time"
 
-	"github.com/hashicorp/errwrap"
-
-	"github.com/nareix/joy5/format/flv"
 	"github.com/nareix/joy5/format/flv/flvio"
-	"github.com/nareix/joy5/utils"
 	"github.com/nareix/joy5/utils/bits/pio"
 )
 
@@ -96,7 +91,7 @@ func (self *message) Start() (err error) {
 	}
 
 	if self.msgdatalen > 4*1024*1024 {
-		err = errwrap.Errorf("MsgDataTooBig(%d)", self.msgdatalen)
+		err = fmt.Errorf("MsgDataTooBig(%d)", self.msgdatalen)
 		return
 	}
 
@@ -106,23 +101,6 @@ func (self *message) Start() (err error) {
 
 	self.msgdata = b
 	return
-}
-
-func (cs *message) dbgchunk(s string) []interface{} {
-	return []interface{}{
-		s,
-		"msgsid", cs.msgsid, "msgtypeid", cs.msgtypeid,
-		"msghdrtype", cs.msghdrtype,
-		"got", fmt.Sprintf("%d/%d", cs.msgdatalen-cs.msgdataleft, cs.msgdatalen),
-	}
-}
-
-func (cs *message) dbgmsg(s string) []interface{} {
-	return []interface{}{
-		s,
-		"msgsid", cs.msgsid, "msgtypeid", cs.msgtypeid,
-		"msghdrtype", cs.msghdrtype, "msgdatalen", len(cs.msgdata),
-	}
 }
 
 const (
@@ -221,21 +199,21 @@ func (self *Conn) fillChunkHeader3(b []byte, csid uint32, timestamp uint32) (n i
 	return
 }
 
-func debugCmdArgs(msg message) []interface{} {
-	r := []interface{}{"Type", msgtypeidString(msg.msgtypeid)}
-	switch msg.msgtypeid {
-	case msgtypeidVideoMsg, msgtypeidAudioMsg:
-	case msgtypeidCommandMsgAMF0, msgtypeidCommandMsgAMF3, msgtypeidDataMsgAMF0, msgtypeidDataMsgAMF3:
-		amf3 := msg.msgtypeid == msgtypeidCommandMsgAMF3 || msg.msgtypeid == msgtypeidDataMsgAMF3
-		arr, _ := flvio.ParseAMFVals(msg.msgdata, amf3)
-		r = append(r, []interface{}{"Cmd", utils.JsonString(arr)}...)
-		return r
-	default:
-		r = append(r, []interface{}{"Data", fmt.Sprintf("%x", msg.msgdata)}...)
-		return r
-	}
-	return nil
-}
+// func debugCmdArgs(msg message) []interface{} {
+// 	r := []interface{}{"Type", msgtypeidString(msg.msgtypeid)}
+// 	switch msg.msgtypeid {
+// 	case msgtypeidVideoMsg, msgtypeidAudioMsg:
+// 	case msgtypeidCommandMsgAMF0, msgtypeidCommandMsgAMF3, msgtypeidDataMsgAMF0, msgtypeidDataMsgAMF3:
+// 		amf3 := msg.msgtypeid == msgtypeidCommandMsgAMF3 || msg.msgtypeid == msgtypeidDataMsgAMF3
+// 		arr, _ := flvio.ParseAMFVals(msg.msgdata, amf3)
+// 		r = append(r, []interface{}{"Cmd", utils.JsonString(arr)}...)
+// 		return r
+// 	default:
+// 		r = append(r, []interface{}{"Data", fmt.Sprintf("%x", msg.msgdata)}...)
+// 		return r
+// 	}
+// 	return nil
+// }
 
 func (self *Conn) readMsg() (msg *message, err error) {
 	for {
@@ -260,34 +238,14 @@ func (self *Conn) readMsg() (msg *message, err error) {
 }
 
 func (self *Conn) debugWriteMsg(msg *message) {
-	if DebugMsgHeader {
-		f := msg.dbgmsg("WriteMsg")
-		self.Logger.Info(f...)
-	}
-	if DebugMsgData {
-		self.Logger.Hexdump(msg.msgdata)
-	}
-	if DebugCmd {
-		args := debugCmdArgs(*msg)
-		if args != nil {
-			self.Logger.Info(append([]interface{}{"WriteCmd"}, args...)...)
-		}
+	if fn := self.LogMsgEvent; fn != nil {
+		fn(false, *msg)
 	}
 }
 
 func (self *Conn) debugReadMsg(msg *message) {
-	if DebugMsgHeader {
-		f := msg.dbgmsg("ReadMsg")
-		self.Logger.Info(f...)
-	}
-	if DebugMsgData {
-		self.Logger.Hexdump(msg.msgdata)
-	}
-	if DebugCmd {
-		args := debugCmdArgs(*msg)
-		if args != nil {
-			self.Logger.Info(append([]interface{}{"ReadCmd"}, args...)...)
-		}
+	if fn := self.LogMsgEvent; fn != nil {
+		fn(true, *msg)
 	}
 }
 
@@ -366,7 +324,7 @@ func (self *Conn) readChunk() (msg *message, err error) {
 		newcs = true
 	}
 	if len(self.readcsmap) > 16 {
-		err = errwrap.Errorf("TooManyCsid")
+		err = fmt.Errorf("TooManyCsid")
 		return
 	}
 
@@ -386,7 +344,7 @@ func (self *Conn) readChunk() (msg *message, err error) {
 		//
 		//       Figure 9 Chunk Message Header – Type 0
 		if cs.msgdataleft != 0 {
-			err = errwrap.Errorf("MsgDataLeft(%d)", cs.msgdataleft)
+			err = fmt.Errorf("MsgDataLeft(%d)", cs.msgdataleft)
 			return
 		}
 		h := b[:11]
@@ -424,11 +382,11 @@ func (self *Conn) readChunk() (msg *message, err error) {
 		//
 		//       Figure 10 Chunk Message Header – Type 1
 		if newcs {
-			err = errwrap.Errorf("Type1NoPrevChunk")
+			err = fmt.Errorf("Type1NoPrevChunk")
 			return
 		}
 		if cs.msgdataleft != 0 {
-			err = errwrap.Errorf("MsgDataLeft(%d)", cs.msgdataleft)
+			err = fmt.Errorf("MsgDataLeft(%d)", cs.msgdataleft)
 			return
 		}
 		h := b[:7]
@@ -464,11 +422,11 @@ func (self *Conn) readChunk() (msg *message, err error) {
 		//
 		//       Figure 11 Chunk Message Header – Type 2
 		if newcs {
-			err = errwrap.Errorf("Type2NoPrevChunk")
+			err = fmt.Errorf("Type2NoPrevChunk")
 			return
 		}
 		if cs.msgdataleft != 0 {
-			err = errwrap.Errorf("MsgDataLeft(%d)", cs.msgdataleft)
+			err = fmt.Errorf("MsgDataLeft(%d)", cs.msgdataleft)
 			return
 		}
 		h := b[:3]
@@ -495,7 +453,7 @@ func (self *Conn) readChunk() (msg *message, err error) {
 
 	case 3:
 		if newcs {
-			err = errwrap.Errorf("Type3NoPrevChunk")
+			err = fmt.Errorf("Type3NoPrevChunk")
 			return
 		}
 		if cs.msgdataleft == 0 {
@@ -538,7 +496,7 @@ func (self *Conn) readChunk() (msg *message, err error) {
 		}
 
 	default:
-		err = errwrap.Errorf("MsgHdrTypeInvalid(%d)", msghdrtype)
+		err = fmt.Errorf("MsgHdrTypeInvalid(%d)", msghdrtype)
 		return
 	}
 
@@ -553,9 +511,8 @@ func (self *Conn) readChunk() (msg *message, err error) {
 	}
 	cs.msgdataleft -= uint32(size)
 
-	if DebugChunkHeader {
-		f := cs.dbgchunk("ReadChunk")
-		self.Logger.Info(f...)
+	if fn := self.LogChunkHeaderEvent; fn != nil {
+		fn(true, *cs)
 	}
 
 	if cs.msgdataleft != 0 {
@@ -569,12 +526,8 @@ func (self *Conn) readChunk() (msg *message, err error) {
 
 func (self *Conn) startPeekReadLoop() {
 	if self.writing() {
-		if DebugStage {
-			self.Logger.Info("PeekReadLoopStarted")
-		}
-
 		go func() {
-			io.Copy(ioutil.Discard, self.RW)
+			io.Copy(ioutil.Discard, self.wrapRW.rw)
 			self.closeNotify <- true
 		}()
 	}
@@ -597,22 +550,13 @@ func (self *Conn) readCommand() (cmd *command, err error) {
 }
 
 func (self *Conn) ReadTag() (tag flvio.Tag, err error) {
-	if ReadWriteTagSetDeadline {
-		if err = self.SetDeadline(time.Now().Add(Timeout)); err != nil {
-			return
-		}
-	}
-
-	if self.isFastRtmp {
-		tag, err = self.fastrtmpReadTagHandleEvent()
-	} else {
-		tag, err = self.rtmpReadTag()
-	}
-	if err != nil {
+	if tag, err = self.rtmpReadTag(); err != nil {
 		return
 	}
 
-	flv.DebugPrintTag("RtmpReadTag", tag)
+	if fn := self.LogTagEvent; fn != nil {
+		fn(true, tag)
+	}
 	return
 }
 
@@ -798,9 +742,8 @@ func (self *Conn) writeMsg(csid uint32, msg message, fillheader func([]byte) int
 	self.debugWriteMsg(&msg)
 
 	progress := func(msg message) {
-		if DebugChunkHeader {
-			f := msg.dbgchunk("WriteChunk")
-			self.Logger.Info(f...)
+		if fn := self.LogChunkHeaderEvent; fn != nil {
+			fn(false, msg)
 		}
 	}
 
@@ -812,16 +755,8 @@ func (self *Conn) writeMsg(csid uint32, msg message, fillheader func([]byte) int
 }
 
 func (self *Conn) WriteTag(tag flvio.Tag) (err error) {
-	if ReadWriteTagSetDeadline {
-		if err = self.SetDeadline(time.Now().Add(Timeout)); err != nil {
-			return
-		}
-	}
-
-	flv.DebugPrintTag("RtmpWriteTag", tag)
-
-	if self.isFastRtmp {
-		return self.fastrtmpWriteTag(tag)
+	if self.LogTagEvent != nil {
+		self.LogTagEvent(false, tag)
 	}
 
 	var csid uint32
@@ -842,7 +777,7 @@ func (self *Conn) WriteTag(tag flvio.Tag) (err error) {
 
 func (self *message) arrToCommand(arr []interface{}) (cmd *command, err error) {
 	if len(arr) < 2 {
-		err = errwrap.Errorf("CmdLenInvalid")
+		err = fmt.Errorf("CmdLenInvalid")
 		return
 	}
 
@@ -850,11 +785,11 @@ func (self *message) arrToCommand(arr []interface{}) (cmd *command, err error) {
 	var ok bool
 
 	if cmd.name, ok = arr[0].(string); !ok {
-		err = errwrap.Errorf("CmdNameInvalid")
+		err = fmt.Errorf("CmdNameInvalid")
 		return
 	}
 	if cmd.transid, ok = arr[1].(float64); !ok {
-		err = errwrap.Errorf("CmdTransIdInvalid")
+		err = fmt.Errorf("CmdTransIdInvalid")
 		return
 	}
 
@@ -911,15 +846,6 @@ func (self *message) parseTag(bypass []uint8) (tag *flvio.Tag, err error) {
 			Data: self.msgdata,
 		}
 		return
-
-	case flvio.TAG_PRIV:
-		_tag := flvio.Tag{Type: self.msgtypeid, Time: self.timenow}
-		if err = _tag.Parse(self.msgdata); err != nil {
-			err = nil
-			return
-		}
-		tag = &_tag
-		return
 	}
 
 	return
@@ -933,9 +859,6 @@ func (self *Conn) writeEvent2(msgtypeid uint8, b []byte, write func([]byte) erro
 }
 
 func (self *Conn) WriteEvent(msgtypeid uint8, b []byte) (err error) {
-	if self.isFastRtmp {
-		return self.fastrtmpWriteEvent(msgtypeid, b)
-	}
 	return self.writeEvent2(msgtypeid, b, self.wrapRW.write)
 }
 
@@ -948,7 +871,7 @@ func (self *Conn) handleEvent(msg *message) (handled bool, err error) {
 			return
 		}
 		if int(v) < 0 {
-			err = errwrap.Errorf("SetChunkSizeInvalid(%x)", v)
+			err = fmt.Errorf("SetChunkSizeInvalid(%x)", v)
 			return
 		}
 		handled = true
