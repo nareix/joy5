@@ -256,20 +256,20 @@ func writeSampleRateIndex(w *bits.Writer, index uint) (err error) {
 	return
 }
 
-func (self MPEG4AudioConfig) IsValid() bool {
-	return self.ObjectType > 0
+func (c MPEG4AudioConfig) IsValid() bool {
+	return c.ObjectType > 0
 }
 
-func (self *MPEG4AudioConfig) complete() error {
-	if int(self.SampleRateIndex) < len(sampleRateTable) {
-		self.SampleRate = sampleRateTable[self.SampleRateIndex]
+func (c *MPEG4AudioConfig) complete() error {
+	if int(c.SampleRateIndex) < len(sampleRateTable) {
+		c.SampleRate = sampleRateTable[c.SampleRateIndex]
 	} else {
-		return fmt.Errorf("InvalidSampleRateIndex(%d)", self.SampleRateIndex)
+		return fmt.Errorf("InvalidSampleRateIndex(%d)", c.SampleRateIndex)
 	}
-	if int(self.ChannelConfig) < len(chanConfigTable) {
-		self.ChannelLayout = chanConfigTable[self.ChannelConfig]
+	if int(c.ChannelConfig) < len(chanConfigTable) {
+		c.ChannelLayout = chanConfigTable[c.ChannelConfig]
 	} else {
-		return fmt.Errorf("InvalidChannelConfig(%d)", self.ChannelConfig)
+		return fmt.Errorf("InvalidChannelConfig(%d)", c.ChannelConfig)
 	}
 	return nil
 }
