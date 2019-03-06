@@ -2,8 +2,6 @@ package pio
 
 import (
 	"testing"
-
-	"github.com/googollee/go-assert"
 )
 
 func TestVecSliceTo(t *testing.T) {
@@ -14,11 +12,17 @@ func TestVecSliceTo(t *testing.T) {
 	out := make([][]byte, 5)
 
 	n := VecSliceTo(in, nil, 100, 100)
-	assert.Equal(t, n, 0)
+	if n != 0 {
+		t.Fail()
+	}
 
 	n = VecSliceTo(in, out, 100, 120)
-	assert.Equal(t, n, 1)
+	if n != 1 {
+		t.Fail()
+	}
 
 	n = VecSliceTo(in, out, 100, 121)
-	assert.Equal(t, n, 2)
+	if n != 2 {
+		t.Fail()
+	}
 }
