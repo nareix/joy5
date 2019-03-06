@@ -161,6 +161,8 @@ type Demuxer struct {
 	b          []byte
 	gotfilehdr bool
 	Malloc     func(int) ([]byte, error)
+
+	LogHeaderEvent func(flags uint8)
 }
 
 func NewDemuxer(r io.Reader) *Demuxer {
@@ -181,9 +183,13 @@ func (r *Demuxer) ReadFileHeader() (err error) {
 	if _, err = io.ReadFull(r.r, r.b[:flvio.FileHeaderLength]); err != nil {
 		return
 	}
+	var flags uint8
 	var skip int
-	if _, skip, err = flvio.ParseFileHeader(r.b); err != nil {
+	if flags, skip, err = flvio.ParseFileHeader(r.b); err != nil {
 		return
+	}
+	if r.LogHeaderEvent != nil {
+		r.LogHeaderEvent(flags)
 	}
 	if _, err = io.CopyN(ioutil.Discard, r.r, int64(skip)); err != nil {
 		return

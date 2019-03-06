@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -13,6 +14,12 @@ import (
 	"github.com/nareix/joy5/av"
 	"github.com/nareix/joy5/format/rtmp"
 )
+
+type dummyCloser struct{}
+
+func (c dummyCloser) Close() error {
+	return nil
+}
 
 type Reader struct {
 	av.PacketReader
@@ -77,6 +84,8 @@ func Open(url_ string) (r *Reader, err error) {
 		return
 	}
 
+	errUnsupported := fmt.Errorf("open `%s` failed: %s", url_, "unsupported format")
+
 	switch u.Scheme {
 	case "rtmp":
 		var c *rtmp.Conn
@@ -90,6 +99,27 @@ func Open(url_ string) (r *Reader, err error) {
 			Rtmp:         c,
 		}
 		return
+
+	case "http", "https":
+		ext := path.Ext(u.Path)
+		switch ext {
+		case ".flv":
+			var hr *http.Response
+			if hr, err = http.Get(url_); err != nil {
+				return
+			}
+			c := flv.NewDemuxer(hr.Body)
+			r = &Reader{
+				PacketReader: c,
+				Closer:       dummyCloser{},
+				Flv:          c,
+			}
+			return
+
+		default:
+			err = errUnsupported
+			return
+		}
 
 	default:
 		ext := path.Ext(u.Path)
@@ -108,7 +138,7 @@ func Open(url_ string) (r *Reader, err error) {
 			return
 
 		default:
-			err = fmt.Errorf("open `%s` failed: %s", url_, "unsupported format")
+			err = errUnsupported
 			return
 		}
 	}
