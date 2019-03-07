@@ -546,7 +546,7 @@ func (c *Conn) Prepare(stage Stage, flags int) (err error) {
 				}
 			}
 			c.Stage = StageHandshakeDone
-			return
+			c.debugStage(flags, false)
 
 		case StageHandshakeDone:
 			if c.isserver {

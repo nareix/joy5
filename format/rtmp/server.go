@@ -7,18 +7,26 @@ import (
 )
 
 const (
-	EventServerConnected = 1
-	EventHandshakeFailed = 2
-	EventHandshakeDone   = 3
-	EventConnFinish      = 4
+	EventConnConnected     = 1
+	EventHandshakeFailed   = 2
+	EventConnDisconnected  = 4
+	EventConnConnectFailed = 5
 )
 
+var EventString = map[int]string{
+	EventConnConnected:     "Connected",
+	EventConnConnectFailed: "ConnectFailed",
+	EventHandshakeFailed:   "HandshakeFailed",
+	EventConnDisconnected:  "ConnDisconnected",
+}
+
 type Server struct {
+	OnNewConn  func(c *Conn)
 	HandleConn func(c *Conn, nc net.Conn)
 
 	HandshakeTimeout time.Duration
 
-	LogEvent func(c *Conn, e int)
+	LogEvent func(c *Conn, nc net.Conn, e int)
 }
 
 func NewServer() *Server {
@@ -35,8 +43,6 @@ type bufReadWriter struct {
 var BufioSize = 4096
 
 func (s *Server) handleAcceptConn(nc net.Conn) {
-	defer nc.Close()
-
 	rw := &bufReadWriter{
 		Reader: bufio.NewReaderSize(nc, BufioSize),
 		Writer: bufio.NewWriterSize(nc, BufioSize),
@@ -44,24 +50,25 @@ func (s *Server) handleAcceptConn(nc net.Conn) {
 	c := NewConn(rw)
 	c.isserver = true
 
+	if fn := s.OnNewConn; fn != nil {
+		fn(c)
+	}
+
 	if s.LogEvent != nil {
-		s.LogEvent(c, EventServerConnected)
+		s.LogEvent(c, nc, EventConnConnected)
 	}
 
 	nc.SetDeadline(time.Now().Add(time.Second * 15))
 	if err := c.Prepare(StageGotPublishOrPlayCommand, 0); err != nil {
 		if s.LogEvent != nil {
-			s.LogEvent(c, EventHandshakeFailed)
+			s.LogEvent(c, nc, EventHandshakeFailed)
 		}
+		nc.Close()
 		return
 	}
 	nc.SetDeadline(time.Time{})
 
 	s.HandleConn(c, nc)
-
-	if s.LogEvent != nil {
-		s.LogEvent(c, EventConnFinish)
-	}
 }
 
 func (s *Server) Serve(lis net.Listener) (err error) {
