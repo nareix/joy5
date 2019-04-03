@@ -33,9 +33,6 @@ type Conn struct {
 
 	wrapRW *wrapReadWriter
 
-	rawbytes  int64
-	BytesSent int64
-
 	peekread chan *message
 
 	avmsgsid            uint32

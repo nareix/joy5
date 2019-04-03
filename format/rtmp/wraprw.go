@@ -3,7 +3,6 @@ package rtmp
 import (
 	"bufio"
 	"io"
-	"sync/atomic"
 )
 
 type wrapReadWriter struct {
@@ -39,9 +38,6 @@ func (r *wrapReadWriter) Write(b []byte) (n int, err error) {
 	if n, err = r.rw.Write(b); err != nil {
 		return
 	}
-
-	atomic.AddInt64(&r.conn.rawbytes, int64(len(b)))
-	atomic.AddInt64(&r.conn.BytesSent, int64(len(b)))
 
 	if fn := r.conn.LogChunkDataEvent; fn != nil {
 		fn(false, b)
