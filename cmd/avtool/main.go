@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nareix/joy5/av/pktop"
 	"github.com/nareix/joy5/format/rtmp"
 
 	"github.com/nareix/joy5/av"
@@ -26,6 +27,11 @@ func doConv(src, dst string) (err error) {
 		return
 	}
 
+	var re *pktop.NativeRateLimiter
+	if fr.Flv != nil {
+		re = pktop.NewNativeRateLimiter()
+	}
+
 	var fw *format.Writer
 
 	for {
@@ -37,17 +43,25 @@ func doConv(src, dst string) (err error) {
 			return
 		}
 
-		fmt.Println(pkt.String())
+		pkts := []av.Packet{pkt}
 
-		if dst != "" && fw == nil {
-			if fw, err = fo.Create(dst); err != nil {
-				return
-			}
+		if re != nil {
+			pkts = re.Do(pkts)
 		}
 
-		if fw != nil {
-			if err = fw.WritePacket(pkt); err != nil {
-				return
+		for _, pkt := range pkts {
+			fmt.Println(pkt.String())
+
+			if dst != "" && fw == nil {
+				if fw, err = fo.Create(dst); err != nil {
+					return
+				}
+			}
+
+			if fw != nil {
+				if err = fw.WritePacket(pkt); err != nil {
+					return
+				}
 			}
 		}
 	}
