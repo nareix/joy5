@@ -1,6 +1,7 @@
 package format
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -25,15 +26,17 @@ func (c dummyCloser) Close() error {
 type Reader struct {
 	av.PacketReader
 	io.Closer
-	Rtmp *rtmp.Conn
-	Flv  *flv.Demuxer
+	NetConn net.Conn
+	Rtmp    *rtmp.Conn
+	Flv     *flv.Demuxer
 }
 
 type Writer struct {
 	av.PacketWriter
 	io.Closer
-	Rtmp *rtmp.Conn
-	Flv  *flv.Muxer
+	NetConn net.Conn
+	Rtmp    *rtmp.Conn
+	Flv     *flv.Muxer
 }
 
 func ErrUnsupported(url_ string) error {
@@ -41,6 +44,9 @@ func ErrUnsupported(url_ string) error {
 }
 
 type URLOpener struct {
+	NewDialFunc     func() func(ctx context.Context, network, address string) (net.Conn, error)
+	ReplaceRawConn  func(nc net.Conn) net.Conn
+	ReplaceRawRW    func(rw io.ReadWriter) io.ReadWriter
 	OnNewRtmpConn   func(c *rtmp.Conn)
 	OnNewRtmpServer func(s *rtmp.Server)
 	OnNewRtmpClient func(c *rtmp.Client)
@@ -48,14 +54,15 @@ type URLOpener struct {
 	OnNewFlvMuxer   func(w *flv.Muxer)
 }
 
-func (o *URLOpener) StartRtmpServerWaitConn(host string) (c *rtmp.Conn, nc net.Conn, err error) {
-	host = rtmp.HostAddDefaultPort(host)
+func (o *URLOpener) StartRtmpServerWaitConn(u *url.URL) (c *rtmp.Conn, nc net.Conn, err error) {
+	host := rtmp.UrlGetHost(u)
 	var lis net.Listener
 	if lis, err = net.Listen("tcp", host); err != nil {
 		return
 	}
 
 	s := rtmp.NewServer()
+	s.ReplaceRawConn = o.ReplaceRawConn
 	if fn := o.OnNewRtmpServer; fn != nil {
 		fn(s)
 	}
@@ -80,6 +87,8 @@ func (o *URLOpener) StartRtmpServerWaitConn(host string) (c *rtmp.Conn, nc net.C
 
 func (o *URLOpener) newRtmpClient() *rtmp.Client {
 	c := rtmp.NewClient()
+	c.ReplaceRawConn = o.ReplaceRawConn
+	c.NewDialFunc = o.NewDialFunc
 	if fn := o.OnNewRtmpClient; fn != nil {
 		fn(c)
 	}
@@ -93,7 +102,7 @@ func (o *URLOpener) Create(url_ string) (w *Writer, err error) {
 	}
 
 	switch u.Scheme {
-	case "rtmp":
+	case "rtmp", "rtmps":
 		rc := o.newRtmpClient()
 		var c *rtmp.Conn
 		var nc net.Conn
@@ -107,6 +116,7 @@ func (o *URLOpener) Create(url_ string) (w *Writer, err error) {
 			PacketWriter: c,
 			Closer:       nc,
 			Rtmp:         c,
+			NetConn:      nc,
 		}
 		return
 
@@ -153,13 +163,14 @@ func (o *URLOpener) Open(url_ string) (r *Reader, err error) {
 		if isServer {
 			var c *rtmp.Conn
 			var nc net.Conn
-			if c, nc, err = o.StartRtmpServerWaitConn(u.Host); err != nil {
+			if c, nc, err = o.StartRtmpServerWaitConn(u); err != nil {
 				return
 			}
 			r = &Reader{
 				PacketReader: c,
 				Closer:       nc,
 				Rtmp:         c,
+				NetConn:      nc,
 			}
 			return
 		} else {
@@ -176,6 +187,7 @@ func (o *URLOpener) Open(url_ string) (r *Reader, err error) {
 				PacketReader: c,
 				Closer:       nc,
 				Rtmp:         c,
+				NetConn:      nc,
 			}
 			return
 		}

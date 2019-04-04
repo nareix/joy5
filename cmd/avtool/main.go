@@ -1,148 +1,13 @@
 package main
 
 import (
-	"fmt"
-	"io"
 	"log"
-	"net"
 	"os"
 	"strings"
-	"sync/atomic"
-	"time"
 
-	"github.com/nareix/joy5/av/pktop"
-	"github.com/nareix/joy5/format/rtmp"
-
-	"github.com/nareix/joy5/av"
-	"github.com/nareix/joy5/format"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
-
-func doConv(src, dst string) (err error) {
-	fo := newFormatOpener()
-
-	var fr *format.Reader
-	if fr, err = fo.Open(src); err != nil {
-		return
-	}
-
-	var re *pktop.NativeRateLimiter
-	if fr.Flv != nil {
-		re = pktop.NewNativeRateLimiter()
-	}
-
-	var fw *format.Writer
-
-	for {
-		var pkt av.Packet
-		if pkt, err = fr.ReadPacket(); err != nil {
-			if err == io.EOF {
-				err = nil
-			}
-			return
-		}
-
-		pkts := []av.Packet{pkt}
-
-		if re != nil {
-			pkts = re.Do(pkts)
-		}
-
-		for _, pkt := range pkts {
-			fmt.Println(pkt.String())
-
-			if dst != "" && fw == nil {
-				if fw, err = fo.Create(dst); err != nil {
-					return
-				}
-			}
-
-			if fw != nil {
-				if err = fw.WritePacket(pkt); err != nil {
-					return
-				}
-			}
-		}
-	}
-}
-
-func doServeRtmp(listenAddr, file string) (err error) {
-	fo := newFormatOpener()
-
-	filePkts := []av.Packet{}
-
-	if file != "" {
-		var r *format.Reader
-		if r, err = fo.Open(file); err != nil {
-			return
-		}
-		for {
-			var pkt av.Packet
-			if pkt, err = r.ReadPacket(); err != nil {
-				if err != io.EOF {
-					return
-				}
-				break
-			}
-			filePkts = append(filePkts, pkt)
-		}
-		r.Close()
-	}
-
-	var lis net.Listener
-	if lis, err = net.Listen("tcp", listenAddr); err != nil {
-		return
-	}
-
-	s := rtmp.NewServer()
-	s.OnNewConn = func(c *rtmp.Conn) {
-		handleRtmpConnFlags(c)
-	}
-	handleRtmpServerFlags(s)
-
-	var pubN, subN int64
-
-	s.HandleConn = func(c *rtmp.Conn, nc net.Conn) {
-		defer func() {
-			nc.Close()
-		}()
-
-		var p *int64
-		if c.Publishing {
-			p = &pubN
-		} else {
-			p = &subN
-		}
-		atomic.AddInt64(p, 1)
-		defer atomic.AddInt64(p, -1)
-
-		if c.Publishing {
-			for {
-				if _, err := c.ReadPacket(); err != nil {
-					return
-				}
-			}
-		} else {
-			start := time.Now()
-			for _, pkt := range filePkts {
-				if err := c.WritePacket(pkt); err != nil {
-					return
-				}
-				time.Sleep(pkt.Time - time.Now().Sub(start))
-			}
-		}
-	}
-
-	go func() {
-		for range time.Tick(time.Second) {
-			fmt.Println("sub", atomic.LoadInt64(&subN), "pub", atomic.LoadInt64(&pubN))
-		}
-	}()
-
-	s.Serve(lis)
-	return
-}
 
 type debugFlags struct {
 	a []*[]string
@@ -193,8 +58,8 @@ func main() {
 		}
 	}
 
-	cmdServeRtmp := &cobra.Command{
-		Use:   "servertmp LISTEN_ADDR [FILE]",
+	cmdBenchRtmp := &cobra.Command{
+		Use:   "benchrtmp LISTEN_ADDR [FILE]",
 		Short: "start rtmp server for benchmark",
 		Args:  cobra.MinimumNArgs(1),
 		Run: run(func(cmd *cobra.Command, args []string) error {
@@ -203,7 +68,27 @@ func main() {
 			if len(args) >= 2 {
 				file = args[1]
 			}
-			return doServeRtmp(listenAddr, file)
+			return doBenchRtmp(listenAddr, file)
+		}),
+	}
+
+	cmdSocks5Server := &cobra.Command{
+		Use:   "socks5server LISTEN_ADDR",
+		Short: "start socks5 server",
+		Args:  cobra.MinimumNArgs(1),
+		Run: run(func(cmd *cobra.Command, args []string) error {
+			listenAddr := args[0]
+			return doSocks5Server(listenAddr)
+		}),
+	}
+
+	cmdForwardRtmp := &cobra.Command{
+		Use:   "forwardrtmp LISTEN_ADDR",
+		Short: "start rtmp forward server",
+		Args:  cobra.MinimumNArgs(1),
+		Run: run(func(cmd *cobra.Command, args []string) error {
+			listenAddr := args[0]
+			return doForwardRtmp(listenAddr)
 		}),
 	}
 
@@ -226,10 +111,19 @@ func main() {
 		debugFlags.AddOpt(fs, "dflv", debugFlvOptsMap)
 	}
 	addDebugFlags(cmdConv.Flags())
-	addDebugFlags(cmdServeRtmp.Flags())
+	addDebugFlags(cmdBenchRtmp.Flags())
+	addDebugFlags(cmdForwardRtmp.Flags())
+	cmdConv.Flags().BoolVar(&optPrintStatSec, "statsec", false, "print stat per second")
+	cmdConv.Flags().BoolVar(&optNativeRate, "re", false, "native rate")
+	cmdConv.Flags().BoolVar(&optDontPrintPkt, "qpkt", false, "don't print pkt")
+
+	addSocks5Flags(cmdForwardRtmp.Flags())
+	addSocks5Flags(cmdConv.Flags())
 
 	rootCmd := &cobra.Command{Use: "avtool"}
 	rootCmd.AddCommand(cmdConv)
-	rootCmd.AddCommand(cmdServeRtmp)
+	rootCmd.AddCommand(cmdBenchRtmp)
+	rootCmd.AddCommand(cmdForwardRtmp)
+	rootCmd.AddCommand(cmdSocks5Server)
 	rootCmd.Execute()
 }

@@ -2,40 +2,14 @@ package rtmp
 
 import (
 	"bufio"
-	"fmt"
+	"context"
+	"crypto/tls"
 	"net"
 	"net/url"
 	"time"
 )
 
-func HostAddDefaultPort(host string) string {
-	if _, _, err := net.SplitHostPort(host); err != nil {
-		host = net.JoinHostPort(host, "1935")
-	}
-	return host
-}
-
-type Client struct {
-	LogEvent func(c *Conn, nc net.Conn, e int)
-}
-
-func NewClient() *Client {
-	return &Client{}
-}
-
-func (t *Client) Dial(url_ string, flags int) (c *Conn, nc net.Conn, err error) {
-	var u *url.URL
-	if u, err = url.Parse(url_); err != nil {
-		return
-	}
-
-	host := HostAddDefaultPort(u.Host)
-
-	if nc, err = net.Dial("tcp", host); err != nil {
-		err = fmt.Errorf("dial `%s` failed: %s", host, err)
-		return
-	}
-
+func (t *Client) FromNetConn(nc net.Conn, u *url.URL, flags int) (c *Conn, err error) {
 	rw := &bufReadWriter{
 		Reader: bufio.NewReaderSize(nc, BufioSize),
 		Writer: bufio.NewWriterSize(nc, BufioSize),
@@ -48,15 +22,82 @@ func (t *Client) Dial(url_ string, flags int) (c *Conn, nc net.Conn, err error) 
 		if fn := t.LogEvent; fn != nil {
 			fn(c_, nc, EventHandshakeFailed)
 		}
-		nc.Close()
 		return
 	}
 	nc.SetDeadline(time.Time{})
 
 	c = c_
+	return
+}
 
-	if fn := t.LogEvent; fn != nil {
-		fn(c, nc, EventConnConnected)
+func UrlGetHost(u *url.URL) string {
+	host := u.Host
+	defaultPort := ""
+	switch u.Scheme {
+	case "rtmp":
+		defaultPort = "1935"
+	case "rtmps":
+		defaultPort = "443"
 	}
+	if _, _, err := net.SplitHostPort(host); err != nil {
+		host = net.JoinHostPort(host, defaultPort)
+	}
+	return host
+}
+
+type Client struct {
+	LogEvent       func(c *Conn, nc net.Conn, e int)
+	ReplaceRawConn func(nc net.Conn) net.Conn
+	NewDialFunc    func() func(ctx context.Context, network, address string) (net.Conn, error)
+}
+
+func NewClient() *Client {
+	return &Client{}
+}
+
+func (t *Client) doDial(host string) (nc net.Conn, err error) {
+	dialer := &net.Dialer{}
+	dial := dialer.DialContext
+	if fn := t.NewDialFunc; fn != nil {
+		dial = fn()
+	}
+	ctx, _ := context.WithTimeout(context.Background(), time.Second*15)
+	if nc, err = dial(ctx, "tcp", host); err != nil {
+		return
+	}
+	if t.ReplaceRawConn != nil {
+		nc = t.ReplaceRawConn(nc)
+	}
+	return
+}
+
+func (t *Client) Dial(url_ string, flags int) (c *Conn, nc net.Conn, err error) {
+	var u *url.URL
+	if u, err = url.Parse(url_); err != nil {
+		return
+	}
+	host := UrlGetHost(u)
+
+	var nc_ net.Conn
+	switch u.Scheme {
+	case "rtmp":
+		if nc_, err = t.doDial(host); err != nil {
+			return
+		}
+	case "rtmps":
+		if nc_, err = t.doDial(host); err != nil {
+			return
+		}
+		nc_ = tls.Client(nc_, &tls.Config{InsecureSkipVerify: true})
+	}
+
+	var c_ *Conn
+	if c_, err = t.FromNetConn(nc_, u, flags); err != nil {
+		nc_.Close()
+		return
+	}
+
+	c = c_
+	nc = nc_
 	return
 }

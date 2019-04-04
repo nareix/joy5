@@ -21,8 +21,9 @@ var EventString = map[int]string{
 }
 
 type Server struct {
-	OnNewConn  func(c *Conn)
-	HandleConn func(c *Conn, nc net.Conn)
+	ReplaceRawConn func(nc net.Conn) net.Conn
+	OnNewConn      func(c *Conn)
+	HandleConn     func(c *Conn, nc net.Conn)
 
 	HandshakeTimeout time.Duration
 
@@ -43,6 +44,9 @@ type bufReadWriter struct {
 var BufioSize = 4096
 
 func (s *Server) handleAcceptConn(nc net.Conn) {
+	if fn := s.ReplaceRawConn; fn != nil {
+		nc = fn(nc)
+	}
 	rw := &bufReadWriter{
 		Reader: bufio.NewReaderSize(nc, BufioSize),
 		Writer: bufio.NewWriterSize(nc, BufioSize),
@@ -54,14 +58,14 @@ func (s *Server) handleAcceptConn(nc net.Conn) {
 		fn(c)
 	}
 
-	if s.LogEvent != nil {
-		s.LogEvent(c, nc, EventConnConnected)
+	if fn := s.LogEvent; fn != nil {
+		fn(c, nc, EventConnConnected)
 	}
 
 	nc.SetDeadline(time.Now().Add(time.Second * 15))
 	if err := c.Prepare(StageGotPublishOrPlayCommand, 0); err != nil {
-		if s.LogEvent != nil {
-			s.LogEvent(c, nc, EventHandshakeFailed)
+		if fn := s.LogEvent; fn != nil {
+			fn(c, nc, EventHandshakeFailed)
 		}
 		nc.Close()
 		return
