@@ -32,14 +32,11 @@ func doConv(src, dst string) (err error) {
 	}
 
 	canRe := func() bool {
-		if fw != nil {
-			if fr.Flv != nil || optNativeRate {
-				return true
-			}
-		} else {
-			if optNativeRate {
-				return true
-			}
+		if optNativeRate {
+			return true
+		}
+		if fw != nil && fw.IsRemote {
+			return true
 		}
 		return false
 	}

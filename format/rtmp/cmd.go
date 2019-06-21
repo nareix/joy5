@@ -502,7 +502,7 @@ func (c *Conn) WritePacket(pkt av.Packet) (err error) {
 	if err = c.Prepare(StageDataStart, PrepareWriting); err != nil {
 		return
 	}
-	return flv.WritePacket(pkt, c.WriteTag)
+	return flv.WritePacket(pkt, c.WriteTag, c.Publishing)
 }
 
 func (c *Conn) debugStage(flags int, goturl bool) {
@@ -564,6 +564,7 @@ func (c *Conn) Prepare(stage Stage, flags int) (err error) {
 					}
 				}
 			}
+			c.startPeekReadLoop()
 			c.debugStage(flags, true)
 
 		case StageGotPublishOrPlayCommand:
@@ -576,7 +577,6 @@ func (c *Conn) Prepare(stage Stage, flags int) (err error) {
 					return
 				}
 			}
-			c.startPeekReadLoop()
 			c.debugStage(flags, false)
 
 		case StageCommandDone:

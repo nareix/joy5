@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/nareix/joy5/format/flv"
 
@@ -26,17 +27,19 @@ func (c dummyCloser) Close() error {
 type Reader struct {
 	av.PacketReader
 	io.Closer
-	NetConn net.Conn
-	Rtmp    *rtmp.Conn
-	Flv     *flv.Demuxer
+	NetConn  net.Conn
+	Rtmp     *rtmp.Conn
+	Flv      *flv.Demuxer
+	IsRemote bool
 }
 
 type Writer struct {
 	av.PacketWriter
 	io.Closer
-	NetConn net.Conn
-	Rtmp    *rtmp.Conn
-	Flv     *flv.Muxer
+	NetConn  net.Conn
+	Rtmp     *rtmp.Conn
+	Flv      *flv.Muxer
+	IsRemote bool
 }
 
 func ErrUnsupported(url_ string) error {
@@ -74,7 +77,16 @@ func (o *URLOpener) StartRtmpServerWaitConn(u *url.URL) (c *rtmp.Conn, nc net.Co
 	s.HandleConn = func(c *rtmp.Conn, nc net.Conn) {
 		got_ <- Got{c, nc}
 	}
-	go s.Serve(lis)
+	go func() {
+		for {
+			nc, err := lis.Accept()
+			if err != nil {
+				time.Sleep(time.Second)
+				continue
+			}
+			go s.HandleNetConn(nc)
+		}
+	}()
 
 	got := <-got_
 	c = got.c
@@ -113,6 +125,7 @@ func (o *URLOpener) Create(url_ string) (w *Writer, err error) {
 			fn(c)
 		}
 		w = &Writer{
+			IsRemote:     true,
 			PacketWriter: c,
 			Closer:       nc,
 			Rtmp:         c,
@@ -171,6 +184,7 @@ func (o *URLOpener) Open(url_ string) (r *Reader, err error) {
 				Closer:       nc,
 				Rtmp:         c,
 				NetConn:      nc,
+				IsRemote:     true,
 			}
 			return
 		} else {
@@ -188,6 +202,7 @@ func (o *URLOpener) Open(url_ string) (r *Reader, err error) {
 				Closer:       nc,
 				Rtmp:         c,
 				NetConn:      nc,
+				IsRemote:     true,
 			}
 			return
 		}
@@ -209,6 +224,7 @@ func (o *URLOpener) Open(url_ string) (r *Reader, err error) {
 				PacketReader: c,
 				Closer:       dummyCloser{},
 				Flv:          c,
+				IsRemote:     true,
 			}
 			return
 

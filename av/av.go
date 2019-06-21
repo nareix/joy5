@@ -14,6 +14,7 @@ const (
 	H264DecoderConfig
 	H264SPSPPSNALU
 	AACDecoderConfig
+	Metadata
 )
 
 var PacketTypeString = map[int]string{
@@ -22,6 +23,7 @@ var PacketTypeString = map[int]string{
 	H264DecoderConfig: "H264DecoderConfig",
 	H264SPSPPSNALU:    "H264SPSPPSNALU",
 	AACDecoderConfig:  "AACDecoderConfig",
+	Metadata:          "Metadata",
 }
 
 type Packet struct {
@@ -30,7 +32,9 @@ type Packet struct {
 	CTime      time.Duration
 	Time       time.Duration
 	Data       []byte
-	ExtraData  []byte
+	ASeqHdr    []byte
+	VSeqHdr    []byte
+	Metadata   []byte
 	AAC        *aac.Codec
 	H264       *h264.Codec
 }

@@ -31,8 +31,10 @@
 			"revisionTime": "2018-12-23T18:29:23Z"
 		},
 		{
+			"checksumSHA1": "GtamqiJoL7PGHsN454AoffBFMa8=",
 			"path": "golang.org/x/net/context",
-			"revision": ""
+			"revision": "f3200d17e092c607f615320ecaad13d87ad9a2b3",
+			"revisionTime": "2019-05-22T15:39:15Z"
 		},
 		{
 			"checksumSHA1": "f3Y7JIZH61oMmp8nphqe8Mg+XoU=",

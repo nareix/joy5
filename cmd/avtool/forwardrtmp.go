@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net"
+	"time"
 	"unsafe"
 
 	"github.com/nareix/joy5/av"
@@ -69,6 +70,15 @@ func doForwardRtmp(listenAddr string) (err error) {
 		log.Println(unsafe.Pointer(c2), nc.LocalAddr(), nc.RemoteAddr(), "Closed")
 	}
 
-	s.Serve(lis)
+	func() {
+		for {
+			nc, err := lis.Accept()
+			if err != nil {
+				time.Sleep(time.Second)
+				continue
+			}
+			go s.HandleNetConn(nc)
+		}
+	}()
 	return
 }

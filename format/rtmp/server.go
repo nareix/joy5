@@ -43,7 +43,7 @@ type bufReadWriter struct {
 
 var BufioSize = 4096
 
-func (s *Server) handleAcceptConn(nc net.Conn) {
+func (s *Server) HandleNetConn(nc net.Conn) {
 	if fn := s.ReplaceRawConn; fn != nil {
 		nc = fn(nc)
 	}
@@ -73,14 +73,4 @@ func (s *Server) handleAcceptConn(nc net.Conn) {
 	nc.SetDeadline(time.Time{})
 
 	s.HandleConn(c, nc)
-}
-
-func (s *Server) Serve(lis net.Listener) (err error) {
-	for {
-		var nc net.Conn
-		if nc, err = lis.Accept(); err != nil {
-			return
-		}
-		go s.handleAcceptConn(nc)
-	}
 }

@@ -85,6 +85,15 @@ func doBenchRtmp(listenAddr, file string) (err error) {
 		}
 	}()
 
-	s.Serve(lis)
+	func() {
+		for {
+			nc, err := lis.Accept()
+			if err != nil {
+				time.Sleep(time.Second)
+				continue
+			}
+			go s.HandleNetConn(nc)
+		}
+	}()
 	return
 }

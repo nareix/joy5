@@ -48,6 +48,7 @@ type Muxer struct {
 	filehdrwritten bool
 	HasVideo       bool
 	HasAudio       bool
+	Publishing     bool
 }
 
 func NewMuxer(w io.Writer) *Muxer {
@@ -106,7 +107,7 @@ func AACTagFromCodec(aac *aac.Codec) flvio.Tag {
 	return tag
 }
 
-func WritePacket(pkt av.Packet, writeTag func(flvio.Tag) error) (err error) {
+func WritePacket(pkt av.Packet, writeTag func(flvio.Tag) error, publishing bool) (err error) {
 	switch pkt.Type {
 	case av.AAC:
 		tag := AACTagFromCodec(pkt.AAC)
@@ -147,13 +148,32 @@ func WritePacket(pkt av.Packet, writeTag func(flvio.Tag) error) (err error) {
 		tag.AACPacketType = flvio.AAC_SEQHDR
 		tag.Data = pkt.Data
 		return writeTag(tag)
+
+	case av.Metadata:
+		arr, perr := flvio.ParseAMFVals(pkt.Data, false)
+		if perr != nil {
+			return
+		}
+		narr := []interface{}{}
+		if publishing {
+			narr = append(narr, SetDataFrame)
+		}
+		narr = append(narr, OnMetaData)
+		narr = append(narr, arr...)
+		tagdata := flvio.FillAMF0ValsMalloc(narr)
+		tag := flvio.Tag{
+			Type: flvio.TAG_AMF0,
+			Data: tagdata,
+			Time: uint32(flvio.TimeToTs(pkt.Time)),
+		}
+		return writeTag(tag)
 	}
 
 	return
 }
 
 func (w *Muxer) WritePacket(pkt av.Packet) (err error) {
-	return WritePacket(pkt, w.WriteTag)
+	return WritePacket(pkt, w.WriteTag, w.Publishing)
 }
 
 type Demuxer struct {
@@ -216,6 +236,17 @@ func ReadPacket(readTag func() (flvio.Tag, error)) (pkt av.Packet, err error) {
 		}
 
 		switch tag.Type {
+		case flvio.TAG_AMF0, flvio.TAG_AMF3:
+			data := convertToAMF0Metadata(tag.Data, tag.Type == flvio.TAG_AMF3)
+			if data != nil {
+				pkt = av.Packet{
+					Type: av.Metadata,
+					Data: data,
+					Time: flvio.TsToTime(int64(tag.Time)),
+				}
+				return
+			}
+
 		case flvio.TAG_VIDEO:
 			switch tag.VideoFormat {
 			case flvio.VIDEO_H264:

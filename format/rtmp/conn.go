@@ -91,3 +91,7 @@ func (c *Conn) writePubPlayErrBeforeClose() {
 func (c *Conn) flushWrite() error {
 	return c.wrapRW.Flush()
 }
+
+func (c *Conn) CloseNotify() <-chan bool {
+	return c.closeNotify
+}
