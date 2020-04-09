@@ -167,7 +167,8 @@ func (s *stream) addSub(close <-chan bool, w av.PacketWriter) {
 	s.sub.Store(ss, nil)
 	defer s.sub.Delete(ss)
 
-	cursor := &gopCacheReadCursor{}
+	var cursor *gopCacheReadCursor
+	var lastsp *streamPub
 
 	seqsplit := splitSeqhdr{
 		cb: func(pkt av.Packet) error {
@@ -177,20 +178,30 @@ func (s *stream) addSub(close <-chan bool, w av.PacketWriter) {
 
 	for {
 		var pkts []av.Packet
-		cur := s.curGopCacheSnapshot()
-		if cur != nil {
-			pkts = cursor.advance(cur)
+
+		sp := (*streamPub)(atomic.LoadPointer(&s.pub))
+		if sp != lastsp {
+			cursor = &gopCacheReadCursor{}
+			lastsp = sp
 		}
+		if sp != nil {
+			cur := sp.gc.curSnapshot()
+			if cur != nil {
+				pkts = cursor.advance(cur)
+			}
+		}
+
 		if len(pkts) == 0 {
 			select {
 			case <-close:
 				return
 			case <-ss.notify:
 			}
-		}
-		for _, pkt := range pkts {
-			if err := seqsplit.do(pkt); err != nil {
-				return
+		} else {
+			for _, pkt := range pkts {
+				if err := seqsplit.do(pkt); err != nil {
+					return
+				}
 			}
 		}
 	}
