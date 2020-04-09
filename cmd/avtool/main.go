@@ -106,6 +106,16 @@ func main() {
 		}),
 	}
 
+	cmdPubsubRtmp := &cobra.Command{
+		Use:   "pubsubrtmp LISTEN_ADDR",
+		Short: "simple pub sub rtmp server",
+		Args:  cobra.MinimumNArgs(1),
+		Run: run(func(cmd *cobra.Command, args []string) error {
+			listenAddr := args[0]
+			return doPubsubRtmp(listenAddr)
+		}),
+	}
+
 	addDebugFlags := func(fs *pflag.FlagSet) {
 		debugFlags.AddOpt(fs, "drtmp", debugRtmpOptsMap)
 		debugFlags.AddOpt(fs, "dflv", debugFlvOptsMap)
@@ -125,5 +135,6 @@ func main() {
 	rootCmd.AddCommand(cmdBenchRtmp)
 	rootCmd.AddCommand(cmdForwardRtmp)
 	rootCmd.AddCommand(cmdSocks5Server)
+	rootCmd.AddCommand(cmdPubsubRtmp)
 	rootCmd.Execute()
 }
