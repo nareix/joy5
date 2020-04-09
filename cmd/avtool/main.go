@@ -123,6 +123,7 @@ func main() {
 	addDebugFlags(cmdConv.Flags())
 	addDebugFlags(cmdBenchRtmp.Flags())
 	addDebugFlags(cmdForwardRtmp.Flags())
+	addDebugFlags(cmdPubsubRtmp.Flags())
 	cmdConv.Flags().BoolVar(&optPrintStatSec, "statsec", false, "print stat per second")
 	cmdConv.Flags().BoolVar(&optNativeRate, "re", false, "native rate")
 	cmdConv.Flags().BoolVar(&optDontPrintPkt, "qpkt", false, "don't print pkt")

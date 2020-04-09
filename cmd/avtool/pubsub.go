@@ -245,10 +245,12 @@ func (s *stream) setPub(r av.PacketReader) {
 			return
 		default:
 		}
+
 		pkt, err := r.ReadPacket()
 		if err != nil {
 			return
 		}
+
 		seqmerge.do(pkt)
 	}
 }
@@ -268,6 +270,8 @@ func (ss *streams) add(k string) (*stream, func()) {
 	ss.l.Lock()
 	defer ss.l.Unlock()
 
+	log.Println("stream", k, "add")
+
 	s, ok := ss.m[k]
 	if !ok {
 		s = &stream{}
@@ -276,6 +280,8 @@ func (ss *streams) add(k string) (*stream, func()) {
 	s.n++
 
 	return s, func() {
+		log.Println("stream", k, "remove")
+
 		ss.l.Lock()
 		defer ss.l.Unlock()
 
@@ -299,7 +305,7 @@ func doPubsubRtmp(listenAddr string) error {
 
 	s.LogEvent = func(c *rtmp.Conn, nc net.Conn, e int) {
 		es := rtmp.EventString[e]
-		log.Println(c.URL.Path, nc.LocalAddr(), nc.RemoteAddr(), es)
+		log.Println(nc.LocalAddr(), nc.RemoteAddr(), es)
 	}
 
 	s.HandleConn = func(c *rtmp.Conn, nc net.Conn) {
