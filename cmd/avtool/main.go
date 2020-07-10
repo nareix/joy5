@@ -106,6 +106,15 @@ func main() {
 		}),
 	}
 
+	cmdAvcc2Annexb := &cobra.Command{
+		Use:   "avcc2annexb src dst",
+		Short: "convert avcc flv to annexb flv",
+		Args:  cobra.MinimumNArgs(2),
+		Run: run(func(cmd *cobra.Command, args []string) error {
+			return doAvcc2Annexb(args[0], args[1])
+		}),
+	}
+
 	addDebugFlags := func(fs *pflag.FlagSet) {
 		debugFlags.AddOpt(fs, "drtmp", debugRtmpOptsMap)
 		debugFlags.AddOpt(fs, "dflv", debugFlvOptsMap)
@@ -123,5 +132,6 @@ func main() {
 	rootCmd.AddCommand(cmdBenchRtmp)
 	rootCmd.AddCommand(cmdForwardRtmp)
 	rootCmd.AddCommand(cmdPubsubRtmp)
+	rootCmd.AddCommand(cmdAvcc2Annexb)
 	rootCmd.Execute()
 }
