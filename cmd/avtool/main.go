@@ -72,16 +72,6 @@ func main() {
 		}),
 	}
 
-	cmdSocks5Server := &cobra.Command{
-		Use:   "socks5server LISTEN_ADDR",
-		Short: "start socks5 server",
-		Args:  cobra.MinimumNArgs(1),
-		Run: run(func(cmd *cobra.Command, args []string) error {
-			listenAddr := args[0]
-			return doSocks5Server(listenAddr)
-		}),
-	}
-
 	cmdForwardRtmp := &cobra.Command{
 		Use:   "forwardrtmp LISTEN_ADDR",
 		Short: "start rtmp forward server",
@@ -128,14 +118,10 @@ func main() {
 	cmdConv.Flags().BoolVar(&optNativeRate, "re", false, "native rate")
 	cmdConv.Flags().BoolVar(&optDontPrintPkt, "qpkt", false, "don't print pkt")
 
-	addSocks5Flags(cmdForwardRtmp.Flags())
-	addSocks5Flags(cmdConv.Flags())
-
 	rootCmd := &cobra.Command{Use: "avtool"}
 	rootCmd.AddCommand(cmdConv)
 	rootCmd.AddCommand(cmdBenchRtmp)
 	rootCmd.AddCommand(cmdForwardRtmp)
-	rootCmd.AddCommand(cmdSocks5Server)
 	rootCmd.AddCommand(cmdPubsubRtmp)
 	rootCmd.Execute()
 }

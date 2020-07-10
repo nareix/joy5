@@ -1,25 +1,15 @@
 package main
 
 import (
-	"context"
 	"encoding/hex"
 	"fmt"
 	"net"
-
-	"golang.org/x/net/proxy"
 
 	"github.com/nareix/joy5/format"
 	"github.com/nareix/joy5/format/flv"
 	"github.com/nareix/joy5/format/flv/flvio"
 	"github.com/nareix/joy5/format/rtmp"
-	"github.com/spf13/pflag"
 )
-
-var optSocks5proxy string
-
-func addSocks5Flags(fs *pflag.FlagSet) {
-	fs.StringVar(&optSocks5proxy, "socks5proxy", "", "socks5 proxy")
-}
 
 var debugRtmpChunkData = false
 var debugRtmpNetEvent = false
@@ -102,12 +92,6 @@ func newFormatOpener() *format.URLOpener {
 		OnNewRtmpClient: func(c *rtmp.Client) {
 			handleRtmpClientFlags(c)
 		},
-	}
-	if optSocks5proxy != "" {
-		fo.NewDialFunc = func() func(ctx context.Context, network, address string) (net.Conn, error) {
-			dialer, _ := proxy.SOCKS5("tcp", optSocks5proxy, nil, nil)
-			return dialer.DialContext
-		}
 	}
 	return fo
 }
