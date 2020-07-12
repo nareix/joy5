@@ -24,6 +24,9 @@ func doMoveH264SeqhdrToKeyFrame(src, dst string) error {
 	r := flv.NewDemuxer(fr)
 	w := flv.NewMuxer(fw)
 
+	rawf, _ := os.Create("/tmp/a.h264")
+	defer rawf.Close()
+
 	var h264seqhdr *h264.Codec
 
 	for {
@@ -53,13 +56,10 @@ func doMoveH264SeqhdrToKeyFrame(src, dst string) error {
 				}
 				nalus = append(nalus, pktnalus...)
 				data := h264.JoinNALUsAnnexb(nalus)
-				data = h264.JoinNALUsAVCC([][]byte{data})
 				pkt.Data = data
-				// data := h264.JoinNALUsAVCC([][]byte{annexb})
 			} else {
 				pktnalus, _ := h264.SplitNALUs(pkt.Data)
 				data := h264.JoinNALUsAnnexb(pktnalus)
-				data = h264.JoinNALUsAVCC([][]byte{data})
 				pkt.Data = data
 			}
 		}
