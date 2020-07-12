@@ -115,6 +115,15 @@ func main() {
 		}),
 	}
 
+	cmdMoveH264SeqhdrToKeyFrame := &cobra.Command{
+		Use:   "moveh264seqhdrtokeyframe src dst",
+		Short: "move h264 seqhdr to keyframe",
+		Args:  cobra.MinimumNArgs(2),
+		Run: run(func(cmd *cobra.Command, args []string) error {
+			return doMoveH264SeqhdrToKeyFrame(args[0], args[1])
+		}),
+	}
+
 	addDebugFlags := func(fs *pflag.FlagSet) {
 		debugFlags.AddOpt(fs, "drtmp", debugRtmpOptsMap)
 		debugFlags.AddOpt(fs, "dflv", debugFlvOptsMap)
@@ -133,5 +142,6 @@ func main() {
 	rootCmd.AddCommand(cmdForwardRtmp)
 	rootCmd.AddCommand(cmdPubsubRtmp)
 	rootCmd.AddCommand(cmdAvcc2Annexb)
+	rootCmd.AddCommand(cmdMoveH264SeqhdrToKeyFrame)
 	rootCmd.Execute()
 }
