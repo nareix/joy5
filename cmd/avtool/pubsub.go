@@ -328,5 +328,4 @@ func doPubsubRtmp(listenAddr string) error {
 		go s.HandleNetConn(nc)
 	}
 
-	return nil
 }

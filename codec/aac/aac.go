@@ -9,6 +9,75 @@ import (
 	"github.com/nareix/joy5/utils/bits"
 )
 
+// Audio sample format.
+type SampleFormat uint8
+
+const (
+	U8   = SampleFormat(iota + 1) // 8-bit unsigned integer
+	S16                           // signed 16-bit integer
+	S32                           // signed 32-bit integer
+	FLT                           // 32-bit float
+	DBL                           // 64-bit float
+	U8P                           // 8-bit unsigned integer in planar
+	S16P                          // signed 16-bit integer in planar
+	S32P                          // signed 32-bit integer in planar
+	FLTP                          // 32-bit float in planar
+	DBLP                          // 64-bit float in planar
+	U32                           // unsigned 32-bit integer
+)
+
+func (self SampleFormat) BytesPerSample() int {
+	switch self {
+	case U8, U8P:
+		return 1
+	case S16, S16P:
+		return 2
+	case FLT, FLTP, S32, S32P, U32:
+		return 4
+	case DBL, DBLP:
+		return 8
+	default:
+		return 0
+	}
+}
+
+func (self SampleFormat) String() string {
+	switch self {
+	case U8:
+		return "U8"
+	case S16:
+		return "S16"
+	case S32:
+		return "S32"
+	case FLT:
+		return "FLT"
+	case DBL:
+		return "DBL"
+	case U8P:
+		return "U8P"
+	case S16P:
+		return "S16P"
+	case FLTP:
+		return "FLTP"
+	case DBLP:
+		return "DBLP"
+	case U32:
+		return "U32"
+	default:
+		return "?"
+	}
+}
+
+// Check if this sample format is in planar.
+func (self SampleFormat) IsPlanar() bool {
+	switch self {
+	case S16P, S32P, FLTP, DBLP:
+		return true
+	default:
+		return false
+	}
+}
+
 // copied from libavcodec/mpeg4audio.h
 const (
 	AOT_AAC_MAIN        = 1 + iota  ///< Y                       Main
@@ -332,11 +401,18 @@ type Codec struct {
 	Config      MPEG4AudioConfig
 }
 
+func (self Codec) SampleFormat() SampleFormat {
+	return FLTP
+}
+
 func PacketDuration(config MPEG4AudioConfig, data []byte) (dur time.Duration) {
 	return time.Duration(1024) * time.Second / time.Duration(config.SampleRate)
 }
 
 func FromMPEG4AudioConfigBytes(b []byte) (c *Codec, err error) {
+	if len(b) == 0 {
+		return nil, fmt.Errorf("aac sdp config is empty")
+	}
 	var config MPEG4AudioConfig
 	if config, err = ParseMPEG4AudioConfigBytes(b); err != nil {
 		return

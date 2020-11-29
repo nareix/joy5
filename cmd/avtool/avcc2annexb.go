@@ -5,6 +5,7 @@ import (
 
 	"github.com/nareix/joy5/av"
 	"github.com/nareix/joy5/codec/h264"
+	"github.com/nareix/joy5/format"
 	"github.com/nareix/joy5/format/flv"
 )
 
@@ -22,7 +23,7 @@ func doAvcc2Annexb(src, dst string) error {
 	defer fw.Close()
 
 	r := flv.NewDemuxer(fr)
-	w := flv.NewMuxer(fw)
+	w := flv.NewMuxer(format.NewStreamsWriteSeeker(fw, nil))
 
 	for {
 		pkt, err := r.ReadPacket()
