@@ -2,10 +2,8 @@ package av
 
 import (
 	"fmt"
+	"io"
 	"time"
-
-	"github.com/nareix/joy5/codec/aac"
-	"github.com/nareix/joy5/codec/h264"
 )
 
 const (
@@ -35,8 +33,6 @@ type Packet struct {
 	ASeqHdr    []byte
 	VSeqHdr    []byte
 	Metadata   []byte
-	AAC        *aac.Codec
-	H264       *h264.Codec
 }
 
 func (p Packet) String() string {
@@ -63,7 +59,26 @@ func (p Packet) String() string {
 	return ret
 }
 
+type Streamer interface {
+	Streams() ([]interface{}, error)
+}
+
+type StreamsWriter interface {
+	io.Writer
+	Streamer
+}
+
+type StreamsWriteSeeker interface {
+	io.Seeker
+	StreamsWriter
+}
+
 type PacketReader interface {
+	ReadPacket() (Packet, error)
+}
+
+type StreamsPacketReader interface {
+	Streamer
 	ReadPacket() (Packet, error)
 }
 

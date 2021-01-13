@@ -467,11 +467,13 @@ type Codec struct {
 	W, H        int
 }
 
-func (c Codec) Equal(b Codec) bool {
+func (c *Codec) Equal(b Codec) bool {
 	return bytes.Compare(c.hash, b.hash) == 0
 }
 
-func (c Codec) ToConfig(b []byte, n *int) {
+func (c *Codec) ToConfig() {
+	var config = make([]byte, c.Len())
+	var pos = 0
 	firstSPS := []byte{}
 	for _, s := range c.SPS {
 		firstSPS = s
@@ -494,26 +496,38 @@ func (c Codec) ToConfig(b []byte, n *int) {
 	LengthSizeMinusOne := byte(0x3)
 	spsCount := len(c.SPS)
 
-	pio.WriteU8(b, n, 1)
-	pio.WriteU8(b, n, AVCProfileIndication)
-	pio.WriteU8(b, n, ProfileCompatibility)
-	pio.WriteU8(b, n, AVCLevelIndication)
-	pio.WriteU8(b, n, LengthSizeMinusOne|0xfc)
-	pio.WriteU8(b, n, uint8(spsCount)|0xe0)
+	pio.WriteU8(config, &pos, 1)
+	pio.WriteU8(config, &pos, AVCProfileIndication)
+	pio.WriteU8(config, &pos, ProfileCompatibility)
+	pio.WriteU8(config, &pos, AVCLevelIndication)
+	pio.WriteU8(config, &pos, LengthSizeMinusOne|0xfc)
+	pio.WriteU8(config, &pos, uint8(spsCount)|0xe0)
 
 	for _, sps := range Map2arr(c.SPS) {
-		pio.WriteU16BE(b, n, uint16(len(sps)))
-		pio.WriteBytes(b, n, sps)
+		pio.WriteU16BE(config, &pos, uint16(len(sps)))
+		pio.WriteBytes(config, &pos, sps)
+
 	}
 
 	ppsCount := len(c.PPS)
-	pio.WriteU8(b, n, uint8(ppsCount))
+	pio.WriteU8(config, &pos, uint8(ppsCount))
 
 	for _, pps := range Map2arr(c.PPS) {
-		pio.WriteU16BE(b, n, uint16(len(pps)))
-		pio.WriteBytes(b, n, pps)
-	}
+		pio.WriteU16BE(config, &pos, uint16(len(pps)))
+		pio.WriteBytes(config, &pos, pps)
 
+	}
+	c.ConfigBytes = config
+}
+
+func (self *Codec) Len() (n int) {
+	n = 7
+	for _, sps := range self.SPS {
+		n += 2 + len(sps)
+	}
+	for _, pps := range self.PPS {
+		n += 2 + len(pps)
+	}
 	return
 }
 

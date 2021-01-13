@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 
 	"github.com/nareix/joy5/av"
-	"github.com/nareix/joy5/codec/aac"
 	"github.com/nareix/joy5/format/flv/flvio"
 )
 
@@ -51,7 +50,7 @@ type Muxer struct {
 	Publishing     bool
 }
 
-func NewMuxer(w io.Writer) *Muxer {
+func NewMuxer(w av.StreamsWriter) *Muxer {
 	m := &Muxer{
 		W: w,
 		b: make([]byte, 256),
@@ -87,22 +86,13 @@ func (w *Muxer) WriteTag(tag flvio.Tag) (err error) {
 	return flvio.WriteTag(w.W, tag, w.b)
 }
 
-func AACTagFromCodec(aac *aac.Codec) flvio.Tag {
-	ch := 1
-	if aac != nil {
-		ch = aac.Config.ChannelLayout.Count()
-	}
+func NewAACTag() flvio.Tag {
 	tag := flvio.Tag{
 		Type:        flvio.TAG_AUDIO,
 		SoundFormat: flvio.SOUND_AAC,
 		SoundRate:   flvio.SOUND_44Khz,
 		SoundSize:   flvio.SOUND_16BIT,
-	}
-	switch ch {
-	case 1:
-		tag.SoundType = flvio.SOUND_MONO
-	default:
-		tag.SoundType = flvio.SOUND_STEREO
+		SoundType:   flvio.SOUND_MONO,
 	}
 	return tag
 }
@@ -110,7 +100,7 @@ func AACTagFromCodec(aac *aac.Codec) flvio.Tag {
 func WritePacket(pkt av.Packet, writeTag func(flvio.Tag) error, publishing bool) (err error) {
 	switch pkt.Type {
 	case av.AAC:
-		tag := AACTagFromCodec(pkt.AAC)
+		tag := NewAACTag()
 		tag.AACPacketType = flvio.AAC_RAW
 		tag.Time = uint32(flvio.TimeToTs(pkt.Time))
 		tag.Data = pkt.Data
@@ -144,7 +134,7 @@ func WritePacket(pkt av.Packet, writeTag func(flvio.Tag) error, publishing bool)
 		return writeTag(tag)
 
 	case av.AACDecoderConfig:
-		tag := AACTagFromCodec(pkt.AAC)
+		tag := NewAACTag()
 		tag.AACPacketType = flvio.AAC_SEQHDR
 		tag.Data = pkt.Data
 		return writeTag(tag)

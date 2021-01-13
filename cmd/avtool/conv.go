@@ -71,7 +71,7 @@ func doConv(src, dst string) (err error) {
 			}
 
 			if dst != "" && fw == nil {
-				if fw, err = foW.Create(dst); err != nil {
+				if fw, err = foW.Create(dst, nil); err != nil {
 					return
 				}
 			}

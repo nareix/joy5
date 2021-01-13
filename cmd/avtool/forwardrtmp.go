@@ -46,7 +46,7 @@ func doForwardRtmp(listenAddr string) (err error) {
 
 		var err error
 		var w *format.Writer
-		if w, err = fo.Create(fwd); err != nil {
+		if w, err = fo.Create(fwd, nil); err != nil {
 			log.Println(unsafe.Pointer(c), nc.LocalAddr(), nc.RemoteAddr(), "DialFailed")
 			return
 		}
@@ -78,5 +78,4 @@ func doForwardRtmp(listenAddr string) (err error) {
 		}
 		go s.HandleNetConn(nc)
 	}
-	return
 }
