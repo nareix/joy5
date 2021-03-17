@@ -108,6 +108,12 @@ func (o *URLOpener) newRtmpClient() *rtmp.Client {
 }
 
 func (o *URLOpener) Create(url_ string) (w *Writer, err error) {
+	isServer := false
+	if strings.HasPrefix(url_, "@") {
+		isServer = true
+		url_ = url_[1:]
+	}
+
 	var u *url.URL
 	if u, err = url.Parse(url_); err != nil {
 		return
@@ -115,21 +121,37 @@ func (o *URLOpener) Create(url_ string) (w *Writer, err error) {
 
 	switch u.Scheme {
 	case "rtmp", "rtmps":
-		rc := o.newRtmpClient()
-		var c *rtmp.Conn
-		var nc net.Conn
-		if c, nc, err = rc.Dial(url_, rtmp.PrepareWriting); err != nil {
+		if isServer {
+			var c *rtmp.Conn
+			var nc net.Conn
+			if c, nc, err = o.StartRtmpServerWaitConn(u); err != nil {
+				return
+			}
+			w = &Writer{
+				IsRemote:     true,
+				PacketWriter: c,
+				Closer:       nc,
+				Rtmp:         c,
+				NetConn:      nc,
+			}
 			return
-		}
-		if fn := o.OnNewRtmpConn; fn != nil {
-			fn(c)
-		}
-		w = &Writer{
-			IsRemote:     true,
-			PacketWriter: c,
-			Closer:       nc,
-			Rtmp:         c,
-			NetConn:      nc,
+		} else {
+			rc := o.newRtmpClient()
+			var c *rtmp.Conn
+			var nc net.Conn
+			if c, nc, err = rc.Dial(url_, rtmp.PrepareWriting); err != nil {
+				return
+			}
+			if fn := o.OnNewRtmpConn; fn != nil {
+				fn(c)
+			}
+			w = &Writer{
+				IsRemote:     true,
+				PacketWriter: c,
+				Closer:       nc,
+				Rtmp:         c,
+				NetConn:      nc,
+			}
 		}
 		return
 
@@ -172,7 +194,7 @@ func (o *URLOpener) Open(url_ string) (r *Reader, err error) {
 	}
 
 	switch u.Scheme {
-	case "rtmp":
+	case "rtmp", "rtmps":
 		if isServer {
 			var c *rtmp.Conn
 			var nc net.Conn
