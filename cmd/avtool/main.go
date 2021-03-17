@@ -124,6 +124,15 @@ func main() {
 		}),
 	}
 
+	cmdSkipGop := &cobra.Command{
+		Use:   "skipgop src dst",
+		Short: "skip gop",
+		Args:  cobra.MinimumNArgs(2),
+		Run: run(func(cmd *cobra.Command, args []string) error {
+			return doSkipGop(args[0], args[1])
+		}),
+	}
+
 	addDebugFlags := func(fs *pflag.FlagSet) {
 		debugFlags.AddOpt(fs, "drtmp", debugRtmpOptsMap)
 		debugFlags.AddOpt(fs, "dflv", debugFlvOptsMap)
@@ -143,5 +152,6 @@ func main() {
 	rootCmd.AddCommand(cmdPubsubRtmp)
 	rootCmd.AddCommand(cmdAvcc2Annexb)
 	rootCmd.AddCommand(cmdMoveH264SeqhdrToKeyFrame)
+	rootCmd.AddCommand(cmdSkipGop)
 	rootCmd.Execute()
 }
