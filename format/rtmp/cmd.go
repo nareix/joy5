@@ -400,7 +400,7 @@ func (c *Conn) connectPublish() (err error) {
 	}
 
 	transid++
-	if err = c.writeCommand(4, c.avmsgsid, "publish", transid, nil, publishpath, connectpath); err != nil {
+	if err = c.writeCommand(8, c.avmsgsid, "publish", transid, nil, publishpath); err != nil {
 		return
 	}
 
